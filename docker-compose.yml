@@ -1,0 +1,62 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - '8080'
+    volumes:
+      - 'app_storage:/var/www/html/storage'
+    networks:
+      - coolify
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - 'http://localhost:8080/up'
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 5
+    labels:
+      - traefik.http.services.tovsystem-app.loadbalancer.server.port=8080
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: 'php artisan queue:work --sleep=3 --tries=3 --max-time=3600'
+    env_file: .env
+    volumes:
+      - 'app_storage:/var/www/html/storage'
+    networks:
+      - coolify
+    depends_on:
+      app:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: 'sh -c "while true; do php artisan schedule:run --no-interaction; sleep 60; done"'
+    env_file: .env
+    volumes:
+      - 'app_storage:/var/www/html/storage'
+    networks:
+      - coolify
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  app_storage: null
+
+networks:
+  coolify:
+    external: true
