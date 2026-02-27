@@ -1,9 +1,16 @@
+# Install PHP dependencies (shared stage for Ziggy + production)
+FROM composer:2 AS vendor
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
+
 # Build frontend assets
 FROM node:20-alpine AS frontend
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --legacy-peer-deps
 COPY . .
+COPY --from=vendor /app/vendor ./vendor
 RUN npm run build
 
 # Production image
@@ -27,23 +34,20 @@ RUN apk add --no-cache \
     opcache \
     && rm -rf /var/cache/apk/*
 
-# Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy composer files first for layer caching
-COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
-
 # Copy application code
 COPY . .
+
+# Copy vendor from composer stage
+COPY --from=vendor /app/vendor ./vendor
 
 # Copy built frontend assets from the frontend stage
 COPY --from=frontend /app/public/build ./public/build
 
 # Generate optimized autoloader
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 RUN composer dump-autoload --optimize --no-dev
 
 # Set permissions
