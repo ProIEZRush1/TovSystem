@@ -3,10 +3,11 @@ set -e
 
 cd /var/www/html
 
-# Ensure storage directories exist
-mkdir -p storage/framework/{sessions,views,cache}
+# Ensure storage directories exist (no brace expansion - Alpine ash doesn't support it)
+mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache
 mkdir -p storage/logs
 mkdir -p storage/app/private/imports
+mkdir -p /var/log/supervisor
 
 # Set permissions
 chown -R www-data:www-data storage bootstrap/cache
@@ -46,9 +47,9 @@ php artisan migrate --force || echo "WARNING: Migration failed, will retry on ne
 php artisan db:seed --force || echo "WARNING: Seeding failed"
 
 # Cache config, routes, views for production
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+php artisan config:cache || echo "WARNING: Config cache failed"
+php artisan route:cache || echo "WARNING: Route cache failed"
+php artisan view:cache || echo "WARNING: View cache failed"
 
 # Create storage link
 php artisan storage:link --force 2>/dev/null || true
