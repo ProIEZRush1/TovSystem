@@ -14,7 +14,7 @@ COPY --from=vendor /app/vendor ./vendor
 RUN npm run build
 
 # Production image
-FROM php:8.3-fpm-alpine AS app
+FROM php:8.4-fpm-alpine AS app
 
 # Install system dependencies
 RUN apk add --no-cache \
@@ -25,6 +25,8 @@ RUN apk add --no-cache \
     icu-dev \
     oniguruma-dev \
     mysql-client \
+    linux-headers \
+    $PHPIZE_DEPS \
     && docker-php-ext-install \
     pdo_mysql \
     zip \
@@ -32,6 +34,9 @@ RUN apk add --no-cache \
     mbstring \
     pcntl \
     opcache \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    && apk del $PHPIZE_DEPS linux-headers \
     && rm -rf /var/cache/apk/*
 
 # Set working directory
