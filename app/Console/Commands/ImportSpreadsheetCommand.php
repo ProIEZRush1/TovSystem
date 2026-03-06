@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Helpers\PhoneCountryHelper;
 use App\Models\Contact;
 use App\Models\Label;
+use App\Models\Status;
 use Illuminate\Console\Command;
+use Illuminate\Support\Str;
 
 class ImportSpreadsheetCommand extends Command
 {
@@ -22,25 +24,85 @@ class ImportSpreadsheetCommand extends Command
         }
 
         $handle = fopen($file, 'r');
-        $header = fgetcsv($handle); // Skip header row
+        $header = fgetcsv($handle);
 
         $this->info("Headers: " . implode(' | ', $header));
-        // Columns: 0=ID, 1=Teléfono, 2=País, 3=MessageType(f), 4=DeviceLabel, 5=Preparado, 6=empty, 7=Fecha
+        // Columns: 0=ID, 1=Teléfono, 2=País, 3=Estado(D), 4=Celular/Label(E), 5=Preparado, 6=empty, 7=Fecha
 
-        $batch = [];
+        // First pass: collect unique status names and label names
+        $statusNames = [];
+        $labelNames = [];
+        $rows = [];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $phone = trim($row[1] ?? '');
+            if (empty($phone)) {
+                continue;
+            }
+
+            $statusName = trim($row[3] ?? '');
+            $labelName = trim($row[4] ?? '');
+
+            if ($statusName && $statusName !== 'f') {
+                $statusNames[$statusName] = true;
+            }
+            if ($labelName) {
+                $labelNames[$labelName] = true;
+            }
+
+            $rows[] = $row;
+        }
+        fclose($handle);
+
+        // Create statuses
+        $statusCache = [];
+        $existingStatuses = Status::all();
+        $maxSortOrder = $existingStatuses->max('sort_order') ?? 0;
+
+        foreach (array_keys($statusNames) as $name) {
+            $slug = Str::slug($name);
+            $existing = $existingStatuses->firstWhere('slug', $slug);
+
+            if ($existing) {
+                $statusCache[$name] = $existing;
+                $this->info("Status exists: {$name} (id: {$existing->id})");
+            } else {
+                $maxSortOrder++;
+                $status = Status::create([
+                    'name' => $name,
+                    'slug' => $slug,
+                    'color' => $this->generateColor($maxSortOrder),
+                    'sort_order' => $maxSortOrder,
+                ]);
+                $statusCache[$name] = $status;
+                $this->info("Status created: {$name} (id: {$status->id})");
+            }
+        }
+
+        // Create labels
         $labelCache = [];
-        $contactLabels = []; // phone => [label_names]
+        foreach (array_keys($labelNames) as $i => $name) {
+            $labelCache[$name] = Label::firstOrCreate(
+                ['slug' => Str::slug($name)],
+                ['name' => $name, 'color' => '#6B7280', 'sort_order' => $i]
+            );
+            $this->info("Label: {$name} (id: {$labelCache[$name]->id})");
+        }
+
+        // Second pass: import contacts with status_id
+        $batch = [];
+        $contactMeta = []; // phone => ['labels' => [], 'status_id' => int]
         $rowCount = 0;
         $skipped = 0;
 
-        while (($row = fgetcsv($handle)) !== false) {
+        foreach ($rows as $row) {
             $phone = trim($row[1] ?? '');
             if (empty($phone)) {
                 $skipped++;
                 continue;
             }
 
-            // Clean phone: remove any trailing garbage like "-1569338053"
+            // Clean phone
             if (preg_match('/^(\+\d+)-\d+$/', $phone, $m)) {
                 $phone = $m[1];
             }
@@ -48,38 +110,55 @@ class ImportSpreadsheetCommand extends Command
             $phone = PhoneCountryHelper::normalize($phone);
             $country = PhoneCountryHelper::detectCountry($phone);
 
-            $source = trim($row[3] ?? '');
-            $deviceLabel = trim($row[4] ?? '');
+            $statusName = trim($row[3] ?? '');
+            $labelName = trim($row[4] ?? '');
             $dateStr = trim($row[7] ?? '');
 
-            // Parse date (d/m/yy format)
+            // Resolve status_id
+            $statusId = null;
+            if ($statusName && isset($statusCache[$statusName])) {
+                $statusId = $statusCache[$statusName]->id;
+            }
+
+            // Parse date (d/m/yy format) with validation
             $date = null;
             if ($dateStr) {
                 $parts = explode('/', $dateStr);
                 if (count($parts) === 3) {
+                    $day = (int) $parts[0];
+                    $month = (int) $parts[1];
                     $year = (int) $parts[2];
                     if ($year < 100) {
                         $year += 2000;
                     }
-                    $date = sprintf('%04d-%02d-%02d', $year, (int) $parts[1], (int) $parts[0]);
+                    if ($month >= 1 && $month <= 12 && $day >= 1 && $day <= 31 && checkdate($month, $day, $year)) {
+                        $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
+                    }
                 }
             }
 
-            $batch[] = [
+            $contactData = [
                 'phone' => $phone,
                 'country' => $country,
-                'source' => $source ?: null,
+                'status_id' => $statusId,
                 'date' => $date,
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
 
-            // Track labels for this contact
-            if ($deviceLabel) {
-                $contactLabels[$phone] = $contactLabels[$phone] ?? [];
-                if (! in_array($deviceLabel, $contactLabels[$phone])) {
-                    $contactLabels[$phone][] = $deviceLabel;
+            $batch[] = $contactData;
+
+            // Track labels and status for this contact
+            if (! isset($contactMeta[$phone])) {
+                $contactMeta[$phone] = ['labels' => [], 'status_id' => null];
+            }
+            if ($labelName && isset($labelCache[$labelName])) {
+                if (! in_array($labelName, $contactMeta[$phone]['labels'])) {
+                    $contactMeta[$phone]['labels'][] = $labelName;
                 }
+            }
+            if ($statusId) {
+                $contactMeta[$phone]['status_id'] = $statusId;
             }
 
             $rowCount++;
@@ -95,46 +174,48 @@ class ImportSpreadsheetCommand extends Command
             $this->upsertBatch($batch);
         }
 
-        fclose($handle);
-
         $this->newLine();
         $this->info("Imported {$rowCount} contacts, skipped {$skipped}.");
 
-        // Create labels and assign them
-        $uniqueLabels = collect($contactLabels)->flatten()->unique()->filter()->values();
-
-        if ($uniqueLabels->isNotEmpty()) {
-            $this->info("Creating {$uniqueLabels->count()} label(s): " . $uniqueLabels->join(', '));
-
-            foreach ($uniqueLabels as $i => $labelName) {
-                $labelCache[$labelName] = Label::firstOrCreate(
-                    ['slug' => \Str::slug($labelName)],
-                    ['name' => $labelName, 'color' => '#6B7280', 'sort_order' => $i]
-                );
-            }
-
-            $this->info('Assigning labels to contacts...');
-            $assigned = 0;
-
-            foreach ($contactLabels as $phone => $labelNames) {
-                $contact = Contact::where('phone', $phone)->first();
-                if ($contact) {
-                    $labelIds = collect($labelNames)
-                        ->map(fn ($name) => $labelCache[$name]?->id)
-                        ->filter()
-                        ->toArray();
-                    $contact->labels()->syncWithoutDetaching($labelIds);
-                    $assigned++;
-                }
-
-                if ($assigned % 500 === 0) {
-                    $this->output->write("\rLabels assigned: {$assigned}");
+        // Update status_id for contacts where upsert didn't set it (upsert only updates listed columns)
+        $this->info('Setting statuses on contacts...');
+        $statusUpdated = 0;
+        foreach ($contactMeta as $phone => $meta) {
+            if ($meta['status_id']) {
+                Contact::where('phone', $phone)->update(['status_id' => $meta['status_id']]);
+                $statusUpdated++;
+                if ($statusUpdated % 500 === 0) {
+                    $this->output->write("\rStatuses set: {$statusUpdated}");
                 }
             }
-
-            $this->newLine();
-            $this->info("Labels assigned to {$assigned} contacts.");
         }
+        $this->newLine();
+        $this->info("Statuses set on {$statusUpdated} contacts.");
+
+        // Assign labels
+        $this->info('Assigning labels to contacts...');
+        $labelsAssigned = 0;
+        foreach ($contactMeta as $phone => $meta) {
+            if (empty($meta['labels'])) {
+                continue;
+            }
+
+            $contact = Contact::where('phone', $phone)->first();
+            if ($contact) {
+                $labelIds = collect($meta['labels'])
+                    ->map(fn ($name) => $labelCache[$name]?->id)
+                    ->filter()
+                    ->toArray();
+                $contact->labels()->syncWithoutDetaching($labelIds);
+                $labelsAssigned++;
+
+                if ($labelsAssigned % 500 === 0) {
+                    $this->output->write("\rLabels assigned: {$labelsAssigned}");
+                }
+            }
+        }
+        $this->newLine();
+        $this->info("Labels assigned to {$labelsAssigned} contacts.");
 
         return 0;
     }
@@ -144,7 +225,13 @@ class ImportSpreadsheetCommand extends Command
         Contact::upsert(
             $batch,
             ['phone'],
-            ['country', 'source', 'date', 'updated_at']
+            ['country', 'status_id', 'date', 'updated_at']
         );
+    }
+
+    protected function generateColor(int $index): string
+    {
+        $colors = ['#8B5CF6', '#EC4899', '#F97316', '#14B8A6', '#6366F1', '#84CC16', '#EAB308', '#0EA5E9'];
+        return $colors[$index % count($colors)];
     }
 }

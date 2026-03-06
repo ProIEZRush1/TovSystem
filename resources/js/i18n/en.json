@@ -175,6 +175,7 @@
         "no": "No",
         "actions": "Actions",
         "created": "Created",
-        "updated": "Updated"
+        "updated": "Updated",
+        "total": "Total"
     }
 }

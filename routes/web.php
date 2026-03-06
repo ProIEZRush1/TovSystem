@@ -22,6 +22,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Contacts
     Route::middleware('permission:contacts.view')->group(function () {
         Route::get('/contacts', [ContactController::class, 'index'])->name('contacts.index');
+        Route::get('/contacts/page', [ContactController::class, 'page'])->name('contacts.page');
         Route::get('/contacts/export', [ContactController::class, 'export'])
             ->name('contacts.export')
             ->middleware('permission:contacts.export');

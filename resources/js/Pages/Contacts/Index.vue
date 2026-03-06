@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { Head, router, Link } from '@inertiajs/vue3';
 import { useI18n } from 'vue-i18n';
 import { usePermissions } from '@/composables/usePermissions';
@@ -8,6 +8,7 @@ import SearchInput from '@/Components/SearchInput.vue';
 import FilterDropdown from '@/Components/FilterDropdown.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import ConfirmModal from '@/Components/ConfirmModal.vue';
+import axios from 'axios';
 
 const { t } = useI18n();
 const { can } = usePermissions();
@@ -20,12 +21,13 @@ const props = defineProps({
     filters: Object,
 });
 
-const search = ref(props.filters?.search || '');
-const statusFilter = ref(props.filters?.status_id || '');
-const countryFilter = ref(props.filters?.country || '');
-const labelFilter = ref(props.filters?.label_id || '');
-const sortField = ref(props.filters?.sort || '');
-const sortDir = ref(props.filters?.direction || 'asc');
+const filters = Array.isArray(props.filters) ? {} : (props.filters || {});
+const search = ref(filters.search || '');
+const statusFilter = ref(filters.status_id || '');
+const countryFilter = ref(filters.country || '');
+const labelFilter = ref(filters.label_id || '');
+const sortField = ref(typeof filters.sort === 'string' ? filters.sort : '');
+const sortDir = ref(typeof filters.direction === 'string' ? filters.direction : 'asc');
 const selectedIds = ref([]);
 const bulkStatusId = ref('');
 const bulkLabelId = ref('');
@@ -33,10 +35,30 @@ const bulkLabelAction = ref('attach');
 const showDeleteModal = ref(false);
 const deleteContactId = ref(null);
 
+// Infinite scroll state
+const allContacts = ref([...props.contacts.data]);
+const currentPage = ref(props.contacts.current_page);
+const lastPage = ref(props.contacts.last_page);
+const nextPageUrl = ref(props.contacts.last_page > 1 ? 'pending' : null);
+const totalContacts = ref(props.contacts.total);
+const loadingMore = ref(false);
+const sentinel = ref(null);
+let observer = null;
+
+// Reset accumulated contacts when Inertia delivers new page props (filter change)
+watch(() => props.contacts, (newContacts) => {
+    allContacts.value = [...newContacts.data];
+    currentPage.value = newContacts.current_page;
+    lastPage.value = newContacts.last_page;
+    nextPageUrl.value = newContacts.last_page > 1 ? 'pending' : null;
+    totalContacts.value = newContacts.total;
+    selectedIds.value = [];
+});
+
 const selectAll = computed({
-    get: () => props.contacts.data.length > 0 && selectedIds.value.length === props.contacts.data.length,
+    get: () => allContacts.value.length > 0 && selectedIds.value.length === allContacts.value.length,
     set: (val) => {
-        selectedIds.value = val ? props.contacts.data.map(c => c.id) : [];
+        selectedIds.value = val ? allContacts.value.map(c => c.id) : [];
     },
 });
 
@@ -79,6 +101,61 @@ function sortIcon(field) {
     if (sortField.value !== field) return '';
     return sortDir.value === 'asc' ? ' \u2191' : ' \u2193';
 }
+
+function buildPageUrl(page) {
+    const params = new URLSearchParams();
+    params.set('page', page);
+    if (search.value) params.set('search', search.value);
+    if (statusFilter.value) params.set('status_id', statusFilter.value);
+    if (countryFilter.value) params.set('country', countryFilter.value);
+    if (labelFilter.value) params.set('label_id', labelFilter.value);
+    if (sortField.value) params.set('sort', sortField.value);
+    if (sortDir.value) params.set('direction', sortDir.value);
+    return route('contacts.page') + '?' + params.toString();
+}
+
+async function loadMore() {
+    if (loadingMore.value || !nextPageUrl.value) return;
+    loadingMore.value = true;
+    const url = buildPageUrl(currentPage.value + 1);
+    try {
+        const response = await axios.get(url);
+        const page = response.data;
+        allContacts.value.push(...page.data);
+        currentPage.value = page.current_page;
+        nextPageUrl.value = page.current_page < page.last_page ? 'pending' : null;
+        totalContacts.value = page.total;
+    } catch (e) {
+        console.error('Failed to load more contacts', e);
+    } finally {
+        loadingMore.value = false;
+    }
+}
+
+function setupObserver() {
+    if (observer) observer.disconnect();
+    observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && nextPageUrl.value && !loadingMore.value) {
+            loadMore();
+        }
+    }, { rootMargin: '200px' });
+
+    if (sentinel.value) {
+        observer.observe(sentinel.value);
+    }
+}
+
+onMounted(() => {
+    nextTick(() => setupObserver());
+});
+
+watch(sentinel, (el) => {
+    if (el && observer) observer.observe(el);
+});
+
+onUnmounted(() => {
+    if (observer) observer.disconnect();
+});
 
 function bulkUpdateStatus() {
     if (!selectedIds.value.length || !bulkStatusId.value) return;
@@ -156,6 +233,7 @@ function exportCsv() {
                     <FilterDropdown v-model="statusFilter" :options="statusOptions" :placeholder="t('contacts.allStatuses')" />
                     <FilterDropdown v-model="countryFilter" :options="countryOptions" :placeholder="t('contacts.allCountries')" />
                     <FilterDropdown v-model="labelFilter" :options="labelOptions" :placeholder="t('labels.allLabels')" />
+                    <span class="text-sm text-slate-500 ml-auto">{{ t('common.total') }}: {{ totalContacts.toLocaleString() }}</span>
                 </div>
 
                 <!-- Bulk actions bar -->
@@ -218,7 +296,7 @@ function exportCsv() {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        <tr v-for="contact in contacts.data" :key="contact.id" class="hover:bg-slate-50/50 transition">
+                        <tr v-for="contact in allContacts" :key="contact.id" class="hover:bg-slate-50/50 transition">
                             <td v-if="can('contacts.bulk_status')" class="px-4 py-3">
                                 <input type="checkbox" :value="contact.id" v-model="selectedIds" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                             </td>
@@ -260,32 +338,25 @@ function exportCsv() {
             </div>
 
             <!-- Empty -->
-            <div v-if="!contacts.data.length" class="px-6 py-12 text-center">
+            <div v-if="!allContacts.length" class="px-6 py-12 text-center">
                 <svg class="mx-auto h-10 w-10 text-slate-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
                 </svg>
                 <p class="mt-2 text-sm text-slate-500">{{ t('contacts.noContacts') }}</p>
             </div>
 
-            <!-- Pagination -->
-            <div v-if="contacts.data.length" class="border-t border-slate-100 px-4 py-3 flex items-center justify-between">
+            <!-- Infinite scroll sentinel + loading indicator -->
+            <div v-if="allContacts.length" class="border-t border-slate-100 px-4 py-3 flex items-center justify-between">
                 <p class="text-sm text-slate-500">
-                    {{ t('common.showing', { from: contacts.from, to: contacts.to, total: contacts.total }) }}
+                    {{ t('common.showing', { from: 1, to: allContacts.length, total: totalContacts }) }}
                 </p>
-                <div class="flex gap-1">
-                    <Link
-                        v-for="link in contacts.links"
-                        :key="link.label"
-                        :href="link.url || ''"
-                        :class="[
-                            'px-3 py-1.5 rounded-lg text-sm font-medium transition',
-                            link.active ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100',
-                            !link.url ? 'opacity-40 pointer-events-none' : ''
-                        ]"
-                        v-html="link.label"
-                        preserve-state
-                    />
-                </div>
+            </div>
+            <div ref="sentinel" class="h-1"></div>
+            <div v-if="loadingMore" class="flex justify-center py-4">
+                <svg class="animate-spin h-6 w-6 text-brand-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
             </div>
         </div>
 

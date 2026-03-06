@@ -7,6 +7,7 @@ use App\Models\Contact;
 use App\Models\Label;
 use App\Models\Status;
 use App\Services\ContactExportService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -48,6 +49,26 @@ class ContactController extends Controller
             'countries' => $countries,
             'filters' => $request->only(['search', 'status_id', 'country', 'label_id', 'sort', 'direction']),
         ]);
+    }
+
+    public function page(Request $request): JsonResponse
+    {
+        $contacts = Contact::query()
+            ->with(['status', 'labels'])
+            ->search($request->input('search'))
+            ->filterByStatus($request->input('status_id') ? (int) $request->input('status_id') : null)
+            ->filterByCountry($request->input('country'))
+            ->filterByLabel($request->input('label_id') ? (int) $request->input('label_id') : null)
+            ->when($request->input('sort'), function ($query) use ($request) {
+                $direction = $request->input('direction', 'asc');
+                $query->orderBy($request->input('sort'), $direction);
+            }, function ($query) {
+                $query->latest('id');
+            })
+            ->paginate(50)
+            ->withQueryString();
+
+        return response()->json($contacts);
     }
 
     public function show(Contact $contact): Response
