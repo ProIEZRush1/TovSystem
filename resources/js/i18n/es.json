@@ -3,6 +3,7 @@
         "dashboard": "Panel",
         "contacts": "Contactos",
         "statuses": "Estados",
+        "labels": "Etiquetas",
         "import": "Importar",
         "admin": "Admin",
         "users": "Usuarios",
@@ -44,6 +45,22 @@
         "save": "Guardar Cambios",
         "countryAutoDetected": "Detectado automaticamente del codigo de pais",
         "noCountryCode": "El numero debe incluir codigo de pais (ej. +1, +52)"
+    },
+    "labels": {
+        "title": "Etiquetas",
+        "name": "Nombre",
+        "color": "Color",
+        "sortOrder": "Orden",
+        "contacts": "Contactos",
+        "add": "Agregar Etiqueta",
+        "edit": "Editar",
+        "delete": "Eliminar",
+        "confirmDelete": "Esta seguro de que desea eliminar esta etiqueta?",
+        "allLabels": "Todas las Etiquetas",
+        "bulkLabels": "Asignar Etiqueta",
+        "attach": "Agregar",
+        "detach": "Quitar",
+        "noLabels": "Sin etiquetas"
     },
     "statuses": {
         "title": "Estados",
@@ -116,6 +133,7 @@
             "dashboard": "Panel",
             "contacts": "Contactos",
             "statuses": "Estados",
+            "labels": "Etiquetas",
             "import": "Importacion",
             "admin": "Administracion"
         },
@@ -128,6 +146,8 @@
             "contacts.bulk_status": "Cambiar estado masivo",
             "statuses.view": "Ver estados",
             "statuses.manage": "Gestionar estados",
+            "labels.view": "Ver etiquetas",
+            "labels.manage": "Gestionar etiquetas",
             "import.manage": "Importar contactos",
             "admin.users.view": "Ver usuarios",
             "admin.users.create": "Crear usuarios",

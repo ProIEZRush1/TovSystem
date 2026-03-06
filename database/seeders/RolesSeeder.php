@@ -25,6 +25,8 @@ class RolesSeeder extends Seeder
                     'contacts.*',
                     'import.manage',
                     'statuses.view',
+                    'labels.view',
+                    'labels.manage',
                 ]),
             ],
             [
@@ -35,6 +37,7 @@ class RolesSeeder extends Seeder
                     'dashboard.view',
                     'contacts.view',
                     'statuses.view',
+                    'labels.view',
                 ]),
             ],
         ];

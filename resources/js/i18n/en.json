@@ -3,6 +3,7 @@
         "dashboard": "Dashboard",
         "contacts": "Contacts",
         "statuses": "Statuses",
+        "labels": "Labels",
         "import": "Import",
         "admin": "Admin",
         "users": "Users",
@@ -44,6 +45,22 @@
         "save": "Save Changes",
         "countryAutoDetected": "Auto-detected from phone country code",
         "noCountryCode": "Phone number must include a country code (e.g. +1, +52)"
+    },
+    "labels": {
+        "title": "Labels",
+        "name": "Name",
+        "color": "Color",
+        "sortOrder": "Sort Order",
+        "contacts": "Contacts",
+        "add": "Add Label",
+        "edit": "Edit",
+        "delete": "Delete",
+        "confirmDelete": "Are you sure you want to delete this label?",
+        "allLabels": "All Labels",
+        "bulkLabels": "Assign Label",
+        "attach": "Add",
+        "detach": "Remove",
+        "noLabels": "No labels"
     },
     "statuses": {
         "title": "Statuses",
@@ -116,6 +133,7 @@
             "dashboard": "Dashboard",
             "contacts": "Contacts",
             "statuses": "Statuses",
+            "labels": "Labels",
             "import": "Import",
             "admin": "Administration"
         },
@@ -128,6 +146,8 @@
             "contacts.bulk_status": "Bulk change status",
             "statuses.view": "View statuses",
             "statuses.manage": "Manage statuses",
+            "labels.view": "View labels",
+            "labels.manage": "Manage labels",
             "import.manage": "Import contacts",
             "admin.users.view": "View users",
             "admin.users.create": "Create users",

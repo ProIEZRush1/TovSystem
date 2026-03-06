@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Helpers\PhoneCountryHelper;
 use App\Models\Contact;
+use App\Models\Label;
 use App\Models\Status;
 use App\Services\ContactExportService;
 use Illuminate\Http\RedirectResponse;
@@ -17,10 +18,11 @@ class ContactController extends Controller
     public function index(Request $request): Response
     {
         $contacts = Contact::query()
-            ->with('status')
+            ->with(['status', 'labels'])
             ->search($request->input('search'))
             ->filterByStatus($request->input('status_id') ? (int) $request->input('status_id') : null)
             ->filterByCountry($request->input('country'))
+            ->filterByLabel($request->input('label_id') ? (int) $request->input('label_id') : null)
             ->when($request->input('sort'), function ($query) use ($request) {
                 $direction = $request->input('direction', 'asc');
                 $query->orderBy($request->input('sort'), $direction);
@@ -31,6 +33,7 @@ class ContactController extends Controller
             ->withQueryString();
 
         $statuses = Status::orderBy('sort_order')->get(['id', 'name', 'color', 'slug']);
+        $labels = Label::orderBy('sort_order')->get(['id', 'name', 'color']);
 
         $countries = Contact::select('country')
             ->whereNotNull('country')
@@ -41,19 +44,22 @@ class ContactController extends Controller
         return Inertia::render('Contacts/Index', [
             'contacts' => $contacts,
             'statuses' => $statuses,
+            'labels' => $labels,
             'countries' => $countries,
-            'filters' => $request->only(['search', 'status_id', 'country', 'sort', 'direction']),
+            'filters' => $request->only(['search', 'status_id', 'country', 'label_id', 'sort', 'direction']),
         ]);
     }
 
     public function show(Contact $contact): Response
     {
-        $contact->load('status');
+        $contact->load(['status', 'labels']);
         $statuses = Status::orderBy('sort_order')->get(['id', 'name', 'color']);
+        $labels = Label::orderBy('sort_order')->get(['id', 'name', 'color']);
 
         return Inertia::render('Contacts/Show', [
             'contact' => $contact,
             'statuses' => $statuses,
+            'labels' => $labels,
             'phoneCountries' => PhoneCountryHelper::allForFrontend(),
         ]);
     }
@@ -79,6 +85,10 @@ class ContactController extends Controller
 
         $contact->update($validated);
 
+        if ($request->has('label_ids')) {
+            $contact->labels()->sync($request->input('label_ids', []));
+        }
+
         return back()->with('success', 'Contact updated.');
     }
 
@@ -99,6 +109,29 @@ class ContactController extends Controller
 
         Contact::whereIn('id', $validated['ids'])
             ->update(['status_id' => $validated['status_id']]);
+
+        return back()->with('success', count($validated['ids']) . ' contacts updated.');
+    }
+
+    public function bulkLabels(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'integer|exists:contacts,id',
+            'label_ids' => 'required|array',
+            'label_ids.*' => 'integer|exists:labels,id',
+            'action' => 'required|in:attach,detach',
+        ]);
+
+        $contacts = Contact::whereIn('id', $validated['ids'])->get();
+
+        foreach ($contacts as $contact) {
+            if ($validated['action'] === 'attach') {
+                $contact->labels()->syncWithoutDetaching($validated['label_ids']);
+            } else {
+                $contact->labels()->detach($validated['label_ids']);
+            }
+        }
 
         return back()->with('success', count($validated['ids']) . ' contacts updated.');
     }

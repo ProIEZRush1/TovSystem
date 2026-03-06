@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Contact extends Model
 {
@@ -28,6 +29,20 @@ class Contact extends Model
     public function status(): BelongsTo
     {
         return $this->belongsTo(Status::class);
+    }
+
+    public function labels(): BelongsToMany
+    {
+        return $this->belongsToMany(Label::class);
+    }
+
+    public function scopeFilterByLabel(Builder $query, ?int $labelId): Builder
+    {
+        if (is_null($labelId)) {
+            return $query;
+        }
+
+        return $query->whereHas('labels', fn (Builder $q) => $q->where('labels.id', $labelId));
     }
 
     public function scopeSearch(Builder $query, ?string $search): Builder

@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import { Head, Link } from '@inertiajs/vue3';
 import { useI18n } from 'vue-i18n';
@@ -16,6 +17,7 @@ const { can } = usePermissions();
 const props = defineProps({
     contact: Object,
     statuses: Array,
+    labels: Array,
     phoneCountries: Array,
 });
 
@@ -26,12 +28,26 @@ const form = useForm({
     status_id: props.contact.status_id || '',
     source: props.contact.source || '',
     notes: props.contact.notes || '',
+    label_ids: props.contact.labels?.map(l => l.id) || [],
 });
 
 function onCountryDetected(countryName) {
     if (countryName) {
         form.country = countryName;
     }
+}
+
+function toggleLabel(labelId) {
+    const idx = form.label_ids.indexOf(labelId);
+    if (idx >= 0) {
+        form.label_ids.splice(idx, 1);
+    } else {
+        form.label_ids.push(labelId);
+    }
+}
+
+function isLabelSelected(labelId) {
+    return form.label_ids.includes(labelId);
 }
 
 function submit() {
@@ -96,6 +112,33 @@ function submit() {
                             <InputError :message="form.errors.source" class="mt-1" />
                         </div>
                     </div>
+
+                    <!-- Labels -->
+                    <div>
+                        <InputLabel :value="t('labels.title')" />
+                        <div class="mt-1.5 flex flex-wrap gap-2">
+                            <button
+                                v-for="label in labels"
+                                :key="label.id"
+                                type="button"
+                                @click="toggleLabel(label.id)"
+                                :class="[
+                                    'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium border-2 transition cursor-pointer',
+                                    isLabelSelected(label.id)
+                                        ? 'border-current shadow-sm'
+                                        : 'border-transparent opacity-50 hover:opacity-75'
+                                ]"
+                                :style="{ backgroundColor: label.color + '20', color: label.color }"
+                            >
+                                <svg v-if="isLabelSelected(label.id)" class="h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                                </svg>
+                                {{ label.name }}
+                            </button>
+                        </div>
+                        <p v-if="!labels?.length" class="mt-1.5 text-xs text-slate-400">{{ t('labels.noLabels') }}</p>
+                    </div>
+
                     <div>
                         <InputLabel :value="t('contacts.notes')" />
                         <textarea v-model="form.notes" rows="3" class="mt-1.5 block w-full rounded-lg border-slate-300 bg-slate-50 text-sm shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:ring-brand-500 transition"></textarea>

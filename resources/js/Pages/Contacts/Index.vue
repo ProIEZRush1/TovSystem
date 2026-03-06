@@ -15,6 +15,7 @@ const { can } = usePermissions();
 const props = defineProps({
     contacts: Object,
     statuses: Array,
+    labels: Array,
     countries: Array,
     filters: Object,
 });
@@ -22,10 +23,13 @@ const props = defineProps({
 const search = ref(props.filters?.search || '');
 const statusFilter = ref(props.filters?.status_id || '');
 const countryFilter = ref(props.filters?.country || '');
+const labelFilter = ref(props.filters?.label_id || '');
 const sortField = ref(props.filters?.sort || '');
 const sortDir = ref(props.filters?.direction || 'asc');
 const selectedIds = ref([]);
 const bulkStatusId = ref('');
+const bulkLabelId = ref('');
+const bulkLabelAction = ref('attach');
 const showDeleteModal = ref(false);
 const deleteContactId = ref(null);
 
@@ -40,6 +44,10 @@ const statusOptions = computed(() =>
     props.statuses.map(s => ({ value: s.id, label: s.name }))
 );
 
+const labelOptions = computed(() =>
+    props.labels.map(l => ({ value: l.id, label: l.name }))
+);
+
 const countryOptions = computed(() =>
     props.countries.map(c => ({ value: c, label: c }))
 );
@@ -49,12 +57,13 @@ function applyFilters() {
         search: search.value || undefined,
         status_id: statusFilter.value || undefined,
         country: countryFilter.value || undefined,
+        label_id: labelFilter.value || undefined,
         sort: sortField.value || undefined,
         direction: sortDir.value || undefined,
     }, { preserveState: true, replace: true });
 }
 
-watch([search, statusFilter, countryFilter], () => applyFilters());
+watch([search, statusFilter, countryFilter, labelFilter], () => applyFilters());
 
 function toggleSort(field) {
     if (sortField.value === field) {
@@ -80,6 +89,20 @@ function bulkUpdateStatus() {
         onSuccess: () => {
             selectedIds.value = [];
             bulkStatusId.value = '';
+        },
+    });
+}
+
+function bulkUpdateLabels() {
+    if (!selectedIds.value.length || !bulkLabelId.value) return;
+    router.post(route('contacts.bulk-labels'), {
+        ids: selectedIds.value,
+        label_ids: [parseInt(bulkLabelId.value)],
+        action: bulkLabelAction.value,
+    }, {
+        onSuccess: () => {
+            selectedIds.value = [];
+            bulkLabelId.value = '';
         },
     });
 }
@@ -132,14 +155,39 @@ function exportCsv() {
                     </div>
                     <FilterDropdown v-model="statusFilter" :options="statusOptions" :placeholder="t('contacts.allStatuses')" />
                     <FilterDropdown v-model="countryFilter" :options="countryOptions" :placeholder="t('contacts.allCountries')" />
+                    <FilterDropdown v-model="labelFilter" :options="labelOptions" :placeholder="t('labels.allLabels')" />
+                </div>
 
-                    <div v-if="selectedIds.length && can('contacts.bulk_status')" class="flex items-center gap-2 ml-auto">
-                        <span class="text-sm text-slate-500">{{ t('contacts.selected', { count: selectedIds.length }) }}</span>
-                        <select v-model="bulkStatusId" class="rounded-lg border-slate-300 text-sm bg-slate-50 focus:border-brand-500 focus:ring-brand-500">
+                <!-- Bulk actions bar -->
+                <div v-if="selectedIds.length && can('contacts.bulk_status')" class="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-brand-50 border border-brand-200 px-4 py-3">
+                    <span class="text-sm font-medium text-brand-700">{{ t('contacts.selected', { count: selectedIds.length }) }}</span>
+
+                    <div class="h-5 w-px bg-brand-200"></div>
+
+                    <!-- Bulk status -->
+                    <div class="flex items-center gap-2">
+                        <select v-model="bulkStatusId" class="rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500">
                             <option value="">{{ t('contacts.bulkStatus') }}</option>
                             <option v-for="s in statuses" :key="s.id" :value="s.id">{{ s.name }}</option>
                         </select>
                         <button @click="bulkUpdateStatus" :disabled="!bulkStatusId" class="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
+                            {{ t('common.save') }}
+                        </button>
+                    </div>
+
+                    <div class="h-5 w-px bg-brand-200"></div>
+
+                    <!-- Bulk labels -->
+                    <div class="flex items-center gap-2">
+                        <select v-model="bulkLabelAction" class="rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500">
+                            <option value="attach">{{ t('labels.attach') }}</option>
+                            <option value="detach">{{ t('labels.detach') }}</option>
+                        </select>
+                        <select v-model="bulkLabelId" class="rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500">
+                            <option value="">{{ t('labels.bulkLabels') }}</option>
+                            <option v-for="l in labels" :key="l.id" :value="l.id">{{ l.name }}</option>
+                        </select>
+                        <button @click="bulkUpdateLabels" :disabled="!bulkLabelId" class="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-600 disabled:opacity-50 transition">
                             {{ t('common.save') }}
                         </button>
                     </div>
@@ -164,6 +212,7 @@ function exportCsv() {
                                 {{ t('contacts.country') }}{{ sortIcon('country') }}
                             </th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{{ t('contacts.status') }}</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{{ t('labels.title') }}</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{{ t('contacts.source') }}</th>
                             <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">{{ t('contacts.actions') }}</th>
                         </tr>
@@ -178,6 +227,19 @@ function exportCsv() {
                             <td class="px-4 py-3 text-sm text-slate-600">{{ contact.country || '-' }}</td>
                             <td class="px-4 py-3">
                                 <StatusBadge v-if="contact.status" :name="contact.status.name" :color="contact.status.color" />
+                                <span v-else class="text-sm text-slate-300">-</span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div v-if="contact.labels?.length" class="flex flex-wrap gap-1">
+                                    <span
+                                        v-for="label in contact.labels"
+                                        :key="label.id"
+                                        class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                                        :style="{ backgroundColor: label.color + '20', color: label.color }"
+                                    >
+                                        {{ label.name }}
+                                    </span>
+                                </div>
                                 <span v-else class="text-sm text-slate-300">-</span>
                             </td>
                             <td class="px-4 py-3 text-sm text-slate-500">{{ contact.source || '-' }}</td>

@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\LabelController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StatusController;
 use Illuminate\Support\Facades\Route;
@@ -35,6 +36,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/contacts/bulk-status', [ContactController::class, 'bulkStatus'])
         ->name('contacts.bulk-status')
         ->middleware('permission:contacts.bulk_status');
+    Route::post('/contacts/bulk-labels', [ContactController::class, 'bulkLabels'])
+        ->name('contacts.bulk-labels')
+        ->middleware('permission:contacts.bulk_status');
+
+    // Labels
+    Route::get('/labels', [LabelController::class, 'index'])
+        ->name('labels.index')
+        ->middleware('permission:labels.view');
+    Route::middleware('permission:labels.manage')->group(function () {
+        Route::post('/labels', [LabelController::class, 'store'])->name('labels.store');
+        Route::put('/labels/{label}', [LabelController::class, 'update'])->name('labels.update');
+        Route::delete('/labels/{label}', [LabelController::class, 'destroy'])->name('labels.destroy');
+    });
 
     // Statuses
     Route::get('/statuses', [StatusController::class, 'index'])
