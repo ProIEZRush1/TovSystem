@@ -39,6 +39,8 @@
         "bulkStatus": "Cambiar Estado",
         "export": "Exportar CSV",
         "selected": "{count} seleccionados",
+        "copyPhones": "Copiar",
+        "copied": "Copiado!",
         "noContacts": "No se encontraron contactos.",
         "confirmDelete": "Esta seguro de que desea eliminar este contacto?",
         "details": "Detalles del Contacto",

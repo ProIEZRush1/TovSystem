@@ -35,6 +35,91 @@ const bulkLabelAction = ref('attach');
 const showDeleteModal = ref(false);
 const deleteContactId = ref(null);
 
+// Drag-to-select state
+let isDragging = false;
+let dragStartIndex = -1;
+let dragSelectMode = true; // true = selecting, false = deselecting
+let lastClickedIndex = -1;
+
+function getRowIndex(contactId) {
+    return allContacts.value.findIndex(c => c.id === contactId);
+}
+
+function selectRange(startIdx, endIdx) {
+    const from = Math.min(startIdx, endIdx);
+    const to = Math.max(startIdx, endIdx);
+    const idsInRange = allContacts.value.slice(from, to + 1).map(c => c.id);
+
+    if (dragSelectMode) {
+        const idSet = new Set(selectedIds.value);
+        idsInRange.forEach(id => idSet.add(id));
+        selectedIds.value = [...idSet];
+    } else {
+        const removeSet = new Set(idsInRange);
+        selectedIds.value = selectedIds.value.filter(id => !removeSet.has(id));
+    }
+}
+
+function onRowMousedown(event, contactId) {
+    if (!can('contacts.bulk_status')) return;
+    // Don't interfere with links, buttons, or checkbox clicks
+    const tag = event.target.tagName;
+    if (tag === 'A' || tag === 'BUTTON' || tag === 'INPUT') return;
+
+    const idx = getRowIndex(contactId);
+    if (idx === -1) return;
+
+    // Shift+click = range select from last clicked
+    if (event.shiftKey && lastClickedIndex !== -1) {
+        event.preventDefault();
+        dragSelectMode = true;
+        selectRange(lastClickedIndex, idx);
+        lastClickedIndex = idx;
+        return;
+    }
+
+    isDragging = true;
+    dragStartIndex = idx;
+    lastClickedIndex = idx;
+    // Determine mode: if row is already selected, we deselect on drag; otherwise select
+    dragSelectMode = !selectedIds.value.includes(contactId);
+
+    // Toggle the clicked row
+    if (dragSelectMode) {
+        if (!selectedIds.value.includes(contactId)) {
+            selectedIds.value.push(contactId);
+        }
+    } else {
+        selectedIds.value = selectedIds.value.filter(id => id !== contactId);
+    }
+
+    // Prevent text selection during drag
+    event.preventDefault();
+}
+
+function onRowMouseenter(contactId) {
+    if (!isDragging) return;
+    const idx = getRowIndex(contactId);
+    if (idx === -1) return;
+    // Reset to only the drag range (not cumulative)
+    const from = Math.min(dragStartIndex, idx);
+    const to = Math.max(dragStartIndex, idx);
+    const idsInRange = allContacts.value.slice(from, to + 1).map(c => c.id);
+
+    if (dragSelectMode) {
+        const idSet = new Set(selectedIds.value);
+        idsInRange.forEach(id => idSet.add(id));
+        selectedIds.value = [...idSet];
+    } else {
+        const removeSet = new Set(idsInRange);
+        selectedIds.value = selectedIds.value.filter(id => !removeSet.has(id));
+    }
+}
+
+function onMouseUp() {
+    isDragging = false;
+}
+
 // Infinite scroll state
 const allContacts = ref([...props.contacts.data]);
 const currentPage = ref(props.contacts.current_page);
@@ -147,6 +232,7 @@ function setupObserver() {
 
 onMounted(() => {
     nextTick(() => setupObserver());
+    document.addEventListener('mouseup', onMouseUp);
 });
 
 watch(sentinel, (el) => {
@@ -155,6 +241,7 @@ watch(sentinel, (el) => {
 
 onUnmounted(() => {
     if (observer) observer.disconnect();
+    document.removeEventListener('mouseup', onMouseUp);
 });
 
 function bulkUpdateStatus() {
@@ -182,6 +269,18 @@ function bulkUpdateLabels() {
             bulkLabelId.value = '';
         },
     });
+}
+
+const copySuccess = ref(false);
+
+async function copySelectedPhones() {
+    const phones = allContacts.value
+        .filter(c => selectedIds.value.includes(c.id))
+        .map(c => c.phone)
+        .join('\n');
+    await navigator.clipboard.writeText(phones);
+    copySuccess.value = true;
+    setTimeout(() => { copySuccess.value = false; }, 2000);
 }
 
 function confirmDelete(id) {
@@ -240,6 +339,17 @@ function exportCsv() {
                 <div v-if="selectedIds.length && can('contacts.bulk_status')" class="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-brand-50 border border-brand-200 px-4 py-3">
                     <span class="text-sm font-medium text-brand-700">{{ t('contacts.selected', { count: selectedIds.length }) }}</span>
 
+                    <!-- Copy phones -->
+                    <button @click="copySelectedPhones" class="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50 transition">
+                        <svg v-if="!copySuccess" class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" />
+                        </svg>
+                        <svg v-else class="h-4 w-4 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                        </svg>
+                        {{ copySuccess ? t('contacts.copied') : t('contacts.copyPhones') }}
+                    </button>
+
                     <div class="h-5 w-px bg-brand-200"></div>
 
                     <!-- Bulk status -->
@@ -296,7 +406,13 @@ function exportCsv() {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        <tr v-for="contact in allContacts" :key="contact.id" class="hover:bg-slate-50/50 transition">
+                        <tr v-for="contact in allContacts" :key="contact.id"
+                            @mousedown="onRowMousedown($event, contact.id)"
+                            @mouseenter="onRowMouseenter(contact.id)"
+                            :class="[
+                                'transition select-none',
+                                selectedIds.includes(contact.id) ? 'bg-brand-50/60' : 'hover:bg-slate-50/50'
+                            ]">
                             <td v-if="can('contacts.bulk_status')" class="px-4 py-3">
                                 <input type="checkbox" :value="contact.id" v-model="selectedIds" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                             </td>
