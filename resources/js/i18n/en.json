@@ -162,6 +162,18 @@
             "admin.roles.manage": "Manage roles"
         }
     },
+    "onboarding": {
+        "step1Title": "Your Contacts",
+        "step1Desc": "Here you can see all your contacts. Use the search bar to find by phone or name. Filter by status, country, or label to find exactly what you need.",
+        "step2Title": "Select Contacts",
+        "step2Desc": "Click the checkboxes on the left to select contacts. You can also drag to select multiple at once, or use Shift+click to select a range.",
+        "step3Title": "Bulk Actions",
+        "step3Desc": "With contacts selected, use the action bar to copy phones to clipboard (for your WhatsApp app), export as CSV, change status, or assign labels.",
+        "skip": "Skip",
+        "prev": "Back",
+        "next": "Next",
+        "done": "Got it"
+    },
     "common": {
         "save": "Save",
         "cancel": "Cancel",

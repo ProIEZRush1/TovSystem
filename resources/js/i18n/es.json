@@ -162,6 +162,18 @@
             "admin.roles.manage": "Gestionar roles"
         }
     },
+    "onboarding": {
+        "step1Title": "Tus Contactos",
+        "step1Desc": "Aqui puedes ver todos tus contactos. Usa la barra de busqueda para encontrar por telefono o nombre. Filtra por estado, pais o etiqueta para encontrar exactamente lo que necesitas.",
+        "step2Title": "Seleccionar Contactos",
+        "step2Desc": "Haz clic en las casillas de la izquierda para seleccionar contactos. Tambien puedes arrastrar para seleccionar varios a la vez, o usar Shift+clic para seleccionar un rango.",
+        "step3Title": "Acciones en Masa",
+        "step3Desc": "Con contactos seleccionados, usa la barra de acciones para copiar telefonos al portapapeles (para tu app de WhatsApp), exportar como CSV, cambiar estado o asignar etiquetas.",
+        "skip": "Omitir",
+        "prev": "Anterior",
+        "next": "Siguiente",
+        "done": "Entendido"
+    },
     "common": {
         "save": "Guardar",
         "cancel": "Cancelar",

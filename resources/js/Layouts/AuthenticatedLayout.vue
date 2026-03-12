@@ -5,6 +5,7 @@ import { usePermissions } from '@/composables/usePermissions';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import LanguageSwitcher from '@/Components/LanguageSwitcher.vue';
 import FlashMessage from '@/Components/FlashMessage.vue';
+import OnboardingTutorial from '@/Components/OnboardingTutorial.vue';
 import { Link, usePage } from '@inertiajs/vue3';
 
 const { t } = useI18n();
@@ -38,6 +39,7 @@ const navigation = computed(() => {
 
 <template>
     <div class="min-h-screen bg-slate-50">
+        <OnboardingTutorial />
         <!-- Mobile sidebar backdrop -->
         <transition
             enter-active-class="transition-opacity ease-linear duration-200"
