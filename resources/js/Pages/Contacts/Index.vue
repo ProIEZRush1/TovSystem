@@ -272,6 +272,7 @@ function bulkUpdateLabels() {
 }
 
 const copySuccess = ref(false);
+const copiedCount = ref(0);
 
 async function copySelectedPhones() {
     const phones = allContacts.value
@@ -279,8 +280,29 @@ async function copySelectedPhones() {
         .map(c => c.phone)
         .join('\n');
     await navigator.clipboard.writeText(phones);
+    copiedCount.value = selectedIds.value.length;
     copySuccess.value = true;
     setTimeout(() => { copySuccess.value = false; }, 2000);
+}
+
+function exportSelectedCsv() {
+    const selected = allContacts.value.filter(c => selectedIds.value.includes(c.id));
+    const header = 'Nombre,Telefono,Estado,Pais';
+    const rows = selected.map(c => {
+        const name = (c.name || '').replace(/"/g, '""');
+        const phone = (c.phone || '');
+        const status = (c.status?.name || '').replace(/"/g, '""');
+        const country = (c.country || '').replace(/"/g, '""');
+        return `"${name}","${phone}","${status}","${country}"`;
+    });
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `contactos-seleccionados-${selected.length}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
 function confirmDelete(id) {
@@ -337,7 +359,17 @@ function exportCsv() {
 
                 <!-- Bulk actions bar -->
                 <div v-if="selectedIds.length && can('contacts.bulk_status')" class="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-brand-50 border border-brand-200 px-4 py-3">
-                    <span class="text-sm font-medium text-brand-700">{{ t('contacts.selected', { count: selectedIds.length }) }}</span>
+                    <span class="text-sm font-bold text-brand-700">{{ t('contacts.selected', { count: selectedIds.length }) }}</span>
+
+                    <!-- Deselect all -->
+                    <button @click="selectedIds = []" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
+                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                        {{ t('contacts.deselectAll') }}
+                    </button>
+
+                    <div class="h-5 w-px bg-brand-200"></div>
 
                     <!-- Copy phones -->
                     <button @click="copySelectedPhones" class="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50 transition">
@@ -347,7 +379,15 @@ function exportCsv() {
                         <svg v-else class="h-4 w-4 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                         </svg>
-                        {{ copySuccess ? t('contacts.copied') : t('contacts.copyPhones') }}
+                        {{ copySuccess ? t('contacts.copied', { count: copiedCount }) : t('contacts.copyPhones') }}
+                    </button>
+
+                    <!-- Export selected CSV -->
+                    <button @click="exportSelectedCsv" class="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-brand-50 transition">
+                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        {{ t('contacts.exportSelected') }}
                     </button>
 
                     <div class="h-5 w-px bg-brand-200"></div>
@@ -388,7 +428,7 @@ function exportCsv() {
                     <thead>
                         <tr class="border-b border-slate-100">
                             <th v-if="can('contacts.bulk_status')" class="w-10 px-4 py-3">
-                                <input type="checkbox" v-model="selectAll" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                <input type="checkbox" v-model="selectAll" class="h-5 w-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer" />
                             </th>
                             <th @click="toggleSort('phone')" class="cursor-pointer px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider hover:text-slate-700 transition">
                                 {{ t('contacts.phone') }}{{ sortIcon('phone') }}
@@ -414,7 +454,7 @@ function exportCsv() {
                                 selectedIds.includes(contact.id) ? 'bg-brand-50/60' : 'hover:bg-slate-50/50'
                             ]">
                             <td v-if="can('contacts.bulk_status')" class="px-4 py-3">
-                                <input type="checkbox" :value="contact.id" v-model="selectedIds" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                <input type="checkbox" :value="contact.id" v-model="selectedIds" class="h-5 w-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer" />
                             </td>
                             <td class="px-4 py-3 text-sm font-medium text-slate-900 whitespace-nowrap font-mono">{{ contact.phone }}</td>
                             <td class="px-4 py-3 text-sm text-slate-700">{{ contact.name || '-' }}</td>

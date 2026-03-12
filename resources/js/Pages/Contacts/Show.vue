@@ -144,8 +144,14 @@ function submit() {
                         <textarea v-model="form.notes" rows="3" class="mt-1.5 block w-full rounded-lg border-slate-300 bg-slate-50 text-sm shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:ring-brand-500 transition"></textarea>
                         <InputError :message="form.errors.notes" class="mt-1" />
                     </div>
-                    <div v-if="can('contacts.update')" class="flex justify-end pt-2">
-                        <PrimaryButton :disabled="form.processing">{{ t('contacts.save') }}</PrimaryButton>
+                    <div v-if="can('contacts.update')" class="flex flex-col items-end gap-1 pt-2">
+                        <PrimaryButton :disabled="form.processing" class="inline-flex items-center gap-2">
+                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                            </svg>
+                            {{ t('contacts.save') }}
+                        </PrimaryButton>
+                        <p class="text-xs text-slate-400">{{ t('contacts.saveHint') }}</p>
                     </div>
                 </form>
             </div>
