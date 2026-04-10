@@ -24,6 +24,7 @@ class ContactController extends Controller
             ->filterByStatus($request->input('status_id') ? (int) $request->input('status_id') : null)
             ->filterByCountry($request->input('country'))
             ->filterByLabel($request->input('label_id') ? (int) $request->input('label_id') : null)
+            ->filterByDate($request->input('date_from'), $request->input('date_to'))
             ->when($request->input('sort'), function ($query) use ($request) {
                 $direction = $request->input('direction', 'asc');
                 $query->orderBy($request->input('sort'), $direction);
@@ -47,7 +48,7 @@ class ContactController extends Controller
             'statuses' => $statuses,
             'labels' => $labels,
             'countries' => $countries,
-            'filters' => $request->only(['search', 'status_id', 'country', 'label_id', 'sort', 'direction']),
+            'filters' => $request->only(['search', 'status_id', 'country', 'label_id', 'sort', 'direction', 'date_from', 'date_to']),
         ]);
     }
 
@@ -59,6 +60,7 @@ class ContactController extends Controller
             ->filterByStatus($request->input('status_id') ? (int) $request->input('status_id') : null)
             ->filterByCountry($request->input('country'))
             ->filterByLabel($request->input('label_id') ? (int) $request->input('label_id') : null)
+            ->filterByDate($request->input('date_from'), $request->input('date_to'))
             ->when($request->input('sort'), function ($query) use ($request) {
                 $direction = $request->input('direction', 'asc');
                 $query->orderBy($request->input('sort'), $direction);
@@ -155,6 +157,88 @@ class ContactController extends Controller
         }
 
         return back()->with('success', count($validated['ids']) . ' contacts updated.');
+    }
+
+    public function quickAdd(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'phones' => 'required|string',
+            'status_id' => 'nullable|exists:statuses,id',
+            'date' => 'nullable|date',
+        ]);
+
+        $lines = array_filter(array_map('trim', explode("\n", $validated['phones'])));
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+
+        foreach ($lines as $line) {
+            // Parse line: could be "Name, +phone" or ", +phone" or just "+phone"
+            $name = null;
+            $phone = $line;
+
+            if (str_contains($line, ',')) {
+                $parts = explode(',', $line, 2);
+                $namePart = trim($parts[0]);
+                $phonePart = trim($parts[1]);
+
+                if (!empty($phonePart)) {
+                    $phone = $phonePart;
+                    if (!empty($namePart)) {
+                        $name = $namePart;
+                    }
+                }
+            }
+
+            $phone = PhoneCountryHelper::normalize($phone);
+
+            if (strlen(preg_replace('/[^0-9]/', '', $phone)) < 7) {
+                $skipped++;
+                continue;
+            }
+
+            $existing = Contact::where('phone', $phone)->first();
+
+            if ($existing) {
+                // Update name if new entry has one and existing doesn't
+                $changed = false;
+                if (!empty($name) && empty($existing->name)) {
+                    $existing->name = $name;
+                    $changed = true;
+                }
+                if (!is_null($validated['status_id']) && is_null($existing->status_id)) {
+                    $existing->status_id = $validated['status_id'];
+                    $changed = true;
+                }
+                if (!empty($validated['date']) && is_null($existing->date)) {
+                    $existing->date = $validated['date'];
+                    $changed = true;
+                }
+                if ($changed) {
+                    $existing->save();
+                    $updated++;
+                } else {
+                    $skipped++;
+                }
+            } else {
+                $country = PhoneCountryHelper::detectCountry($phone);
+                Contact::create([
+                    'phone' => $phone,
+                    'name' => $name,
+                    'country' => $country,
+                    'status_id' => $validated['status_id'] ?? null,
+                    'date' => $validated['date'] ?? null,
+                ]);
+                $created++;
+            }
+        }
+
+        return response()->json([
+            'created' => $created,
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'total' => count($lines),
+        ]);
     }
 
     public function export(Request $request, ContactExportService $exportService): StreamedResponse

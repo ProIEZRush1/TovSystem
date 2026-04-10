@@ -49,7 +49,17 @@
         "save": "Guardar y volver",
         "saveHint": "Guarda los cambios y vuelve a la lista de contactos",
         "countryAutoDetected": "Detectado automaticamente del codigo de pais",
-        "noCountryCode": "El numero debe incluir codigo de pais (ej. +1, +52)"
+        "noCountryCode": "El numero debe incluir codigo de pais (ej. +1, +52)",
+        "dateFrom": "Fecha desde",
+        "dateTo": "Fecha hasta",
+        "quickAdd": "Agregar Telefonos",
+        "quickAddPhones": "Telefonos (uno por linea)",
+        "quickAddPlaceholder": ", +5215522772313\nSharon Barylka, +5215620997088\n+5215555096868",
+        "quickAddSubmit": "Agregar",
+        "quickAddDone": "Telefonos procesados",
+        "quickAddCreated": "{count} nuevos",
+        "quickAddUpdated": "{count} actualizados",
+        "quickAddSkipped": "{count} ya existian"
     },
     "labels": {
         "title": "Etiquetas",

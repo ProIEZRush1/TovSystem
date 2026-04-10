@@ -32,8 +32,16 @@ const selectedIds = ref([]);
 const bulkStatusId = ref('');
 const bulkLabelId = ref('');
 const bulkLabelAction = ref('attach');
+const dateFrom = ref(filters.date_from || '');
+const dateTo = ref(filters.date_to || '');
 const showDeleteModal = ref(false);
 const deleteContactId = ref(null);
+const showQuickAdd = ref(false);
+const quickAddPhones = ref('');
+const quickAddStatusId = ref('');
+const quickAddDate = ref('');
+const quickAddLoading = ref(false);
+const quickAddResult = ref(null);
 
 // Drag-to-select state
 let isDragging = false;
@@ -165,12 +173,14 @@ function applyFilters() {
         status_id: statusFilter.value || undefined,
         country: countryFilter.value || undefined,
         label_id: labelFilter.value || undefined,
+        date_from: dateFrom.value || undefined,
+        date_to: dateTo.value || undefined,
         sort: sortField.value || undefined,
         direction: sortDir.value || undefined,
     }, { preserveState: true, replace: true });
 }
 
-watch([search, statusFilter, countryFilter, labelFilter], () => applyFilters());
+watch([search, statusFilter, countryFilter, labelFilter, dateFrom, dateTo], () => applyFilters());
 
 function toggleSort(field) {
     if (sortField.value === field) {
@@ -194,6 +204,8 @@ function buildPageUrl(page) {
     if (statusFilter.value) params.set('status_id', statusFilter.value);
     if (countryFilter.value) params.set('country', countryFilter.value);
     if (labelFilter.value) params.set('label_id', labelFilter.value);
+    if (dateFrom.value) params.set('date_from', dateFrom.value);
+    if (dateTo.value) params.set('date_to', dateTo.value);
     if (sortField.value) params.set('sort', sortField.value);
     if (sortDir.value) params.set('direction', sortDir.value);
     return route('contacts.page') + '?' + params.toString();
@@ -275,11 +287,14 @@ const copySuccess = ref(false);
 const copiedCount = ref(0);
 
 async function copySelectedPhones() {
-    const phones = allContacts.value
+    const lines = allContacts.value
         .filter(c => selectedIds.value.includes(c.id))
-        .map(c => c.phone)
+        .map(c => {
+            const name = c.name ? c.name.trim() : '';
+            return name ? `${name}, ${c.phone}` : `, ${c.phone}`;
+        })
         .join('\n');
-    await navigator.clipboard.writeText(phones);
+    await navigator.clipboard.writeText(lines);
     copiedCount.value = selectedIds.value.length;
     copySuccess.value = true;
     setTimeout(() => { copySuccess.value = false; }, 2000);
@@ -326,6 +341,27 @@ function exportCsv() {
     if (countryFilter.value) params.set('country', countryFilter.value);
     window.location.href = route('contacts.export') + '?' + params.toString();
 }
+
+async function submitQuickAdd() {
+    if (!quickAddPhones.value.trim()) return;
+    quickAddLoading.value = true;
+    quickAddResult.value = null;
+    try {
+        const response = await axios.post(route('contacts.quick-add'), {
+            phones: quickAddPhones.value,
+            status_id: quickAddStatusId.value || null,
+            date: quickAddDate.value || null,
+        });
+        quickAddResult.value = response.data;
+        quickAddPhones.value = '';
+        // Reload contacts list
+        router.reload({ only: ['contacts'] });
+    } catch (e) {
+        console.error('Quick add failed', e);
+    } finally {
+        quickAddLoading.value = false;
+    }
+}
 </script>
 
 <template>
@@ -335,12 +371,20 @@ function exportCsv() {
         <template #header>
             <div class="flex items-center justify-between">
                 <h2 class="text-xl font-bold text-slate-900">{{ t('contacts.title') }}</h2>
-                <button v-if="can('contacts.export')" @click="exportCsv" class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition">
-                    <svg class="h-4 w-4 text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                    </svg>
-                    {{ t('contacts.export') }}
-                </button>
+                <div class="flex items-center gap-2">
+                    <button v-if="can('import.manage')" @click="showQuickAdd = true" class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-500 transition">
+                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                        {{ t('contacts.quickAdd') }}
+                    </button>
+                    <button v-if="can('contacts.export')" @click="exportCsv" class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition">
+                        <svg class="h-4 w-4 text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        {{ t('contacts.export') }}
+                    </button>
+                </div>
             </div>
         </template>
 
@@ -354,6 +398,11 @@ function exportCsv() {
                     <FilterDropdown v-model="statusFilter" :options="statusOptions" :placeholder="t('contacts.allStatuses')" />
                     <FilterDropdown v-model="countryFilter" :options="countryOptions" :placeholder="t('contacts.allCountries')" />
                     <FilterDropdown v-model="labelFilter" :options="labelOptions" :placeholder="t('labels.allLabels')" />
+                    <div class="flex items-center gap-1.5">
+                        <input type="date" v-model="dateFrom" class="rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500 w-36" :title="t('contacts.dateFrom')" />
+                        <span class="text-slate-400 text-xs">-</span>
+                        <input type="date" v-model="dateTo" class="rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500 w-36" :title="t('contacts.dateTo')" />
+                    </div>
                     <span class="text-sm text-slate-500 ml-auto">{{ t('common.total') }}: {{ totalContacts.toLocaleString() }}</span>
                 </div>
 
@@ -523,5 +572,72 @@ function exportCsv() {
             @confirm="deleteContact"
             @cancel="showDeleteModal = false"
         />
+
+        <!-- Quick Add Modal -->
+        <teleport to="body">
+            <transition
+                enter-active-class="transition-opacity duration-200"
+                enter-from-class="opacity-0"
+                enter-to-class="opacity-100"
+                leave-active-class="transition-opacity duration-150"
+                leave-from-class="opacity-100"
+                leave-to-class="opacity-0"
+            >
+                <div v-if="showQuickAdd" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" @click.self="showQuickAdd = false">
+                    <div class="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden">
+                        <div class="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+                            <h3 class="text-lg font-bold text-slate-900">{{ t('contacts.quickAdd') }}</h3>
+                            <button @click="showQuickAdd = false" class="text-slate-400 hover:text-slate-600 transition">
+                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="px-6 py-4 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('contacts.quickAddPhones') }}</label>
+                                <textarea
+                                    v-model="quickAddPhones"
+                                    rows="8"
+                                    class="block w-full rounded-lg border-slate-300 bg-slate-50 text-sm font-mono shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:ring-brand-500 transition"
+                                    :placeholder="t('contacts.quickAddPlaceholder')"
+                                ></textarea>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('contacts.status') }}</label>
+                                    <select v-model="quickAddStatusId" class="block w-full rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500">
+                                        <option value="">-</option>
+                                        <option v-for="s in statuses" :key="s.id" :value="s.id">{{ s.name }}</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('contacts.date') }}</label>
+                                    <input type="date" v-model="quickAddDate" class="block w-full rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500" />
+                                </div>
+                            </div>
+
+                            <!-- Result feedback -->
+                            <div v-if="quickAddResult" class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm">
+                                <p class="font-medium text-green-800">{{ t('contacts.quickAddDone') }}</p>
+                                <p class="text-green-700 mt-1">
+                                    {{ t('contacts.quickAddCreated', { count: quickAddResult.created }) }},
+                                    {{ t('contacts.quickAddUpdated', { count: quickAddResult.updated }) }},
+                                    {{ t('contacts.quickAddSkipped', { count: quickAddResult.skipped }) }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="border-t border-slate-100 px-6 py-4 flex justify-end gap-3">
+                            <button @click="showQuickAdd = false" class="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
+                                {{ t('common.close') }}
+                            </button>
+                            <button @click="submitQuickAdd" :disabled="quickAddLoading || !quickAddPhones.trim()" class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
+                                {{ quickAddLoading ? t('common.loading') : t('contacts.quickAddSubmit') }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </transition>
+        </teleport>
     </AuthenticatedLayout>
 </template>

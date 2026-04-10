@@ -74,4 +74,16 @@ class Contact extends Model
 
         return $query->where('country', $country);
     }
+
+    public function scopeFilterByDate(Builder $query, ?string $dateFrom, ?string $dateTo): Builder
+    {
+        if (!empty($dateFrom)) {
+            $query->where('date', '>=', $dateFrom);
+        }
+        if (!empty($dateTo)) {
+            $query->where('date', '<=', $dateTo);
+        }
+
+        return $query;
+    }
 }
