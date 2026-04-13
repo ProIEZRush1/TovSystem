@@ -21,6 +21,10 @@ enum Permission: string
     // Import
     case IMPORT_MANAGE = 'import.manage';
 
+    // WhatsApp
+    case WHATSAPP_VIEW = 'whatsapp.view';
+    case WHATSAPP_MANAGE = 'whatsapp.manage';
+
     // Admin: Users
     case ADMIN_USERS_VIEW = 'admin.users.view';
     case ADMIN_USERS_CREATE = 'admin.users.create';

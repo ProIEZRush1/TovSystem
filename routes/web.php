@@ -4,6 +4,8 @@ use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\WhatsAppController;
+use App\Http\Controllers\WhatsAppWebhookController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\LabelController;
 use App\Http\Controllers\ProfileController;
@@ -73,6 +75,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/import/{import}/status', [ImportController::class, 'status'])->name('import.status');
     });
 
+    // WhatsApp
+    Route::middleware('permission:whatsapp.view')->group(function () {
+        Route::get('/whatsapp', [WhatsAppController::class, 'index'])->name('whatsapp.index');
+        Route::get('/whatsapp/{account}/chat', [WhatsAppController::class, 'chat'])->name('whatsapp.chat');
+        Route::get('/whatsapp/{account}/messages', [WhatsAppController::class, 'messages'])->name('whatsapp.messages');
+        Route::get('/whatsapp/{account}/templates', [WhatsAppController::class, 'templates'])->name('whatsapp.templates');
+    });
+    Route::middleware('permission:whatsapp.manage')->group(function () {
+        Route::post('/whatsapp', [WhatsAppController::class, 'store'])->name('whatsapp.store');
+        Route::put('/whatsapp/{account}', [WhatsAppController::class, 'update'])->name('whatsapp.update');
+        Route::delete('/whatsapp/{account}', [WhatsAppController::class, 'destroy'])->name('whatsapp.destroy');
+        Route::post('/whatsapp/{account}/refresh', [WhatsAppController::class, 'refresh'])->name('whatsapp.refresh');
+        Route::post('/whatsapp/{account}/send', [WhatsAppController::class, 'send'])->name('whatsapp.send');
+        Route::post('/whatsapp/{account}/bulk-send', [WhatsAppController::class, 'bulkSend'])->name('whatsapp.bulk-send');
+    });
+
     // Profile (always accessible)
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -107,5 +125,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
     });
 });
+
+// WhatsApp Webhook (public, no auth)
+Route::get('/webhook/whatsapp', [WhatsAppWebhookController::class, 'verify']);
+Route::post('/webhook/whatsapp', [WhatsAppWebhookController::class, 'handle']);
 
 require __DIR__.'/auth.php';

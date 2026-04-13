@@ -18,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
+        $middleware->validateCsrfTokens(except: [
+            'webhook/*',
+        ]);
+
         $middleware->alias([
             'permission' => \App\Http\Middleware\RequirePermission::class,
         ]);
