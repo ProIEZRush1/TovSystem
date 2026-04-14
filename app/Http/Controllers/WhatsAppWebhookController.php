@@ -26,7 +26,8 @@ class WhatsAppWebhookController extends Controller
     {
         $payload = $request->all();
 
-        Log::info('WhatsApp webhook received', ['payload' => $payload]);
+        // Log at warning level so it survives production LOG_LEVEL=error
+        Log::warning('WhatsApp webhook received', ['payload' => $payload]);
 
         if (($payload['object'] ?? '') !== 'whatsapp_business_account') {
             return response('OK', 200);
@@ -121,6 +122,15 @@ class WhatsAppWebhookController extends Controller
             return;
         }
 
-        WhatsAppMessage::where('wamid', $wamid)->update(['status' => $newStatus]);
+        $update = ['status' => $newStatus];
+
+        // Capture Meta error details on failure
+        if ($newStatus === 'failed' && !empty($status['errors'])) {
+            $err = $status['errors'][0] ?? [];
+            $update['error_code'] = $err['code'] ?? null;
+            $update['error_message'] = trim(($err['title'] ?? '') . ': ' . ($err['error_data']['details'] ?? $err['message'] ?? ''), ': ');
+        }
+
+        WhatsAppMessage::where('wamid', $wamid)->update($update);
     }
 }

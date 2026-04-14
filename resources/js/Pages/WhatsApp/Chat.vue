@@ -350,6 +350,9 @@ function formatDate(dateStr) {
                         >
                             <p class="whitespace-pre-wrap">{{ msg.content }}</p>
                             <p v-if="msg.template_name" class="text-xs opacity-75 mt-1">{{ msg.template_name }}</p>
+                            <p v-if="msg.status === 'failed' && msg.error_message" class="text-xs mt-1 rounded bg-red-500/20 px-2 py-1 font-medium">
+                                ⚠️ {{ msg.error_message }}
+                            </p>
                             <div class="flex items-center justify-end gap-1 mt-1">
                                 <span :class="['text-xs', msg.direction === 'outbound' ? 'text-green-200' : 'text-slate-400']">
                                     {{ formatTime(msg.sent_at || msg.created_at) }}

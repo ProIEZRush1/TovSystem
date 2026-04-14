@@ -120,7 +120,7 @@ class WhatsAppController extends Controller
             ->where('remote_phone', $phone)
             ->orderBy('created_at')
             ->limit(200)
-            ->get(['id', 'direction', 'type', 'content', 'template_name', 'status', 'sent_at', 'created_at']);
+            ->get(['id', 'direction', 'type', 'content', 'template_name', 'status', 'error_code', 'error_message', 'sent_at', 'created_at']);
 
         return response()->json($messages);
     }

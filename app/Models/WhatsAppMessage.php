@@ -19,6 +19,8 @@ class WhatsAppMessage extends Model
         'template_name',
         'wamid',
         'status',
+        'error_message',
+        'error_code',
         'sent_at',
     ];
 
