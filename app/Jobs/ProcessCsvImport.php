@@ -76,6 +76,11 @@ class ProcessCsvImport implements ShouldQueue
                         continue;
                     }
 
+                    // Apply global_date if set (overrides per-row date)
+                    if (!empty($import->global_date)) {
+                        $contact['date'] = $import->global_date->format('Y-m-d');
+                    }
+
                     $batch[] = $contact;
                 }
             } catch (\Throwable $e) {
@@ -176,6 +181,24 @@ class ProcessCsvImport implements ShouldQueue
     protected function upsertBatch(array $batch): int
     {
         try {
+            // Preserve existing names: if contact exists and has a name, don't overwrite it
+            $phones = array_column($batch, 'phone');
+            $existingNames = Contact::whereIn('phone', $phones)
+                ->whereNotNull('name')
+                ->where('name', '!=', '')
+                ->pluck('name', 'phone')
+                ->toArray();
+
+            foreach ($batch as &$contact) {
+                if (isset($existingNames[$contact['phone']])) {
+                    // Existing has a name - keep it (unless the new import row explicitly has one too)
+                    if (empty($contact['name'])) {
+                        $contact['name'] = $existingNames[$contact['phone']];
+                    }
+                }
+            }
+            unset($contact);
+
             Contact::upsert(
                 $batch,
                 ['phone'],

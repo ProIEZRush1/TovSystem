@@ -53,6 +53,7 @@
         "noCountryCode": "El numero debe incluir codigo de pais (ej. +1, +52)",
         "dateFrom": "Fecha desde",
         "dateTo": "Fecha hasta",
+        "bulkDate": "Fecha a Seleccionados",
         "quickAdd": "Agregar Telefonos",
         "quickAddPhones": "Telefonos (uno por linea)",
         "quickAddPlaceholder": ", +5215522772313\nSharon Barylka, +5215620997088\n+5215555096868",
@@ -112,7 +113,9 @@
         "rowsImported": "Filas Importadas",
         "errors": "Errores",
         "back": "Volver a Importar",
-        "countryAutoNote": "Los paises se detectaran automaticamente del codigo de pais del telefono"
+        "countryAutoNote": "Los paises se detectaran automaticamente del codigo de pais del telefono",
+        "globalDate": "Fecha para todos los contactos",
+        "globalDateHint": "Si la seleccionas, esta fecha se aplicara a TODOS los contactos importados (ideal para registrar la fecha de envio)"
     },
     "admin": {
         "users": {

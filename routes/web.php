@@ -42,6 +42,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/contacts/bulk-labels', [ContactController::class, 'bulkLabels'])
         ->name('contacts.bulk-labels')
         ->middleware('permission:contacts.bulk_status');
+    Route::post('/contacts/bulk-date', [ContactController::class, 'bulkDate'])
+        ->name('contacts.bulk-date')
+        ->middleware('permission:contacts.bulk_status');
     Route::post('/contacts/quick-add', [ContactController::class, 'quickAdd'])
         ->name('contacts.quick-add')
         ->middleware('permission:import.manage');

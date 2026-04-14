@@ -53,6 +53,7 @@
         "noCountryCode": "Phone number must include a country code (e.g. +1, +52)",
         "dateFrom": "Date from",
         "dateTo": "Date to",
+        "bulkDate": "Date to Selected",
         "quickAdd": "Add Phones",
         "quickAddPhones": "Phone numbers (one per line)",
         "quickAddPlaceholder": ", +5215522772313\nSharon Barylka, +5215620997088\n+5215555096868",
@@ -112,7 +113,9 @@
         "rowsImported": "Rows Imported",
         "errors": "Errors",
         "back": "Back to Import",
-        "countryAutoNote": "Countries will be auto-detected from phone country codes"
+        "countryAutoNote": "Countries will be auto-detected from phone country codes",
+        "globalDate": "Date for all contacts",
+        "globalDateHint": "If set, this date will be applied to ALL imported contacts (ideal for tracking send date)"
     },
     "admin": {
         "users": {

@@ -57,6 +57,7 @@ class ImportController extends Controller
             'original_name' => 'required|string',
             'total_rows' => 'required|integer|min:1',
             'column_mapping' => 'required|array',
+            'global_date' => 'nullable|date',
         ]);
 
         $import = Import::create([
@@ -65,6 +66,7 @@ class ImportController extends Controller
             'original_filename' => $validated['original_name'],
             'total_rows' => $validated['total_rows'],
             'column_mapping' => $validated['column_mapping'],
+            'global_date' => $validated['global_date'] ?? null,
             'status' => 'pending',
         ]);
 

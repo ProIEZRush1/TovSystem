@@ -32,6 +32,7 @@ const selectedIds = ref([]);
 const bulkStatusId = ref('');
 const bulkLabelId = ref('');
 const bulkLabelAction = ref('attach');
+const bulkDateValue = ref('');
 const dateFrom = ref(filters.date_from || '');
 const dateTo = ref(filters.date_to || '');
 const showDeleteModal = ref(false);
@@ -269,6 +270,19 @@ function bulkUpdateStatus() {
     });
 }
 
+function bulkUpdateDate() {
+    if (!selectedIds.value.length) return;
+    router.post(route('contacts.bulk-date'), {
+        ids: selectedIds.value,
+        date: bulkDateValue.value || null,
+    }, {
+        onSuccess: () => {
+            selectedIds.value = [];
+            bulkDateValue.value = '';
+        },
+    });
+}
+
 function bulkUpdateLabels() {
     if (!selectedIds.value.length || !bulkLabelId.value) return;
     router.post(route('contacts.bulk-labels'), {
@@ -449,6 +463,16 @@ async function submitQuickAdd() {
                         </select>
                         <button @click="bulkUpdateStatus" :disabled="!bulkStatusId" class="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
                             {{ t('common.save') }}
+                        </button>
+                    </div>
+
+                    <div class="h-5 w-px bg-brand-200"></div>
+
+                    <!-- Bulk date -->
+                    <div class="flex items-center gap-2">
+                        <input type="date" v-model="bulkDateValue" class="rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500 w-36" :title="t('contacts.bulkDate')" />
+                        <button @click="bulkUpdateDate" :disabled="!bulkDateValue" class="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-600 disabled:opacity-50 transition">
+                            {{ t('contacts.bulkDate') }}
                         </button>
                     </div>
 

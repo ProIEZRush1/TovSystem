@@ -15,6 +15,7 @@ class Import extends Model
         'rows_imported',
         'status',
         'column_mapping',
+        'global_date',
         'errors',
         'started_at',
         'completed_at',
@@ -25,6 +26,7 @@ class Import extends Model
         return [
             'column_mapping' => 'array',
             'errors' => 'array',
+            'global_date' => 'date',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
         ];

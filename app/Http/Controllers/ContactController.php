@@ -136,6 +136,20 @@ class ContactController extends Controller
         return back()->with('success', count($validated['ids']) . ' contacts updated.');
     }
 
+    public function bulkDate(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'integer|exists:contacts,id',
+            'date' => 'nullable|date',
+        ]);
+
+        Contact::whereIn('id', $validated['ids'])
+            ->update(['date' => $validated['date'] ?? null]);
+
+        return back()->with('success', count($validated['ids']) . ' contacts updated.');
+    }
+
     public function bulkLabels(Request $request): RedirectResponse
     {
         $validated = $request->validate([

@@ -17,6 +17,7 @@ const error = ref('');
 
 const uploadData = ref(null);
 const columnMapping = ref({});
+const globalDate = ref('');
 
 async function handleFileSelected(file) {
     loading.value = true;
@@ -69,6 +70,7 @@ function startImport() {
         original_name: uploadData.value.original_name,
         total_rows: uploadData.value.total_rows,
         column_mapping: realMapping,
+        global_date: globalDate.value || null,
     });
 }
 </script>
@@ -134,6 +136,13 @@ function startImport() {
                         :fields="uploadData.contact_fields"
                         v-model="columnMapping"
                     />
+
+                    <!-- Global date -->
+                    <div class="mt-4 rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('import.globalDate') }}</label>
+                        <input type="date" v-model="globalDate" class="block w-full max-w-xs rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" />
+                        <p class="mt-1 text-xs text-slate-500">{{ t('import.globalDateHint') }}</p>
+                    </div>
 
                     <div class="mt-4 flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-4 py-3">
                         <svg class="h-5 w-5 text-blue-500 mt-0.5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
