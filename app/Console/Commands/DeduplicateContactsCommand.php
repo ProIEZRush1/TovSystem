@@ -78,9 +78,13 @@ class DeduplicateContactsCommand extends Command
                     $primary->country = $other->country;
                 }
 
-                // Collect labels from duplicate
+                // Collect labels from duplicate (SQL-level insertOrIgnore to handle duplicates safely)
                 if (!$dryRun && $other->labels->isNotEmpty()) {
-                    $primary->labels()->syncWithoutDetaching($other->labels->pluck('id')->toArray());
+                    $rows = $other->labels->pluck('id')->map(fn ($labelId) => [
+                        'contact_id' => $primary->id,
+                        'label_id' => $labelId,
+                    ])->toArray();
+                    DB::table('contact_label')->insertOrIgnore($rows);
                 }
             }
 
