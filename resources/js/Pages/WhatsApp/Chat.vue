@@ -278,8 +278,24 @@ function formatDate(dateStr) {
                                 <span :class="['text-xs', msg.direction === 'outbound' ? 'text-green-200' : 'text-slate-400']">
                                     {{ formatTime(msg.sent_at || msg.created_at) }}
                                 </span>
-                                <span v-if="msg.direction === 'outbound'" :class="['text-xs', msg.status === 'read' ? 'text-blue-300' : 'text-green-200']">
-                                    {{ msg.status === 'delivered' || msg.status === 'read' ? '...' : '' }}
+                                <!-- WhatsApp-style ticks -->
+                                <span v-if="msg.direction === 'outbound'" class="inline-flex items-center">
+                                    <!-- Failed: red X -->
+                                    <svg v-if="msg.status === 'failed'" class="h-3.5 w-3.5 text-red-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                                    </svg>
+                                    <!-- Read: double check blue -->
+                                    <svg v-else-if="msg.status === 'read'" class="h-3.5 w-3.5 text-blue-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" fill="currentColor">
+                                        <path d="M17.394 5.035l-.57-.444a.434.434 0 00-.609.076l-6.39 8.198a.38.38 0 01-.577.039l-.427-.388a.381.381 0 00-.578.038l-.451.576a.497.497 0 00.043.645l1.575 1.51a.38.38 0 00.577-.039l7.483-9.602a.436.436 0 00-.076-.609zm-4.892 0l-.57-.444a.434.434 0 00-.609.076l-6.39 8.198a.38.38 0 01-.577.039L2.614 9.8a.436.436 0 00-.614.074l-.452.595a.436.436 0 00.075.615l3.265 3.13a.38.38 0 00.577-.038l7.483-9.602a.436.436 0 00-.076-.609z"/>
+                                    </svg>
+                                    <!-- Delivered: double check gray -->
+                                    <svg v-else-if="msg.status === 'delivered'" class="h-3.5 w-3.5 text-green-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" fill="currentColor">
+                                        <path d="M17.394 5.035l-.57-.444a.434.434 0 00-.609.076l-6.39 8.198a.38.38 0 01-.577.039l-.427-.388a.381.381 0 00-.578.038l-.451.576a.497.497 0 00.043.645l1.575 1.51a.38.38 0 00.577-.039l7.483-9.602a.436.436 0 00-.076-.609zm-4.892 0l-.57-.444a.434.434 0 00-.609.076l-6.39 8.198a.38.38 0 01-.577.039L2.614 9.8a.436.436 0 00-.614.074l-.452.595a.436.436 0 00.075.615l3.265 3.13a.38.38 0 00.577-.038l7.483-9.602a.436.436 0 00-.076-.609z"/>
+                                    </svg>
+                                    <!-- Sent: single check -->
+                                    <svg v-else class="h-3.5 w-3.5 text-green-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" fill="currentColor">
+                                        <path d="M15.01 3.316l-.478-.372a.365.365 0 00-.51.063L8.666 9.879a.32.32 0 01-.484.033l-.358-.325a.319.319 0 00-.484.032l-.378.483a.418.418 0 00.036.541l1.32 1.266a.32.32 0 00.484-.033l6.272-8.048a.366.366 0 00-.064-.512z"/>
+                                    </svg>
                                 </span>
                             </div>
                         </div>
