@@ -134,11 +134,11 @@ class WhatsAppController extends Controller
 
         $result = $whatsApp->sendTextMessage($account, $validated['phone'], $validated['message']);
 
-        if (!$result) {
-            return response()->json(['error' => 'Failed to send message'], 500);
+        if (!$result['success']) {
+            return response()->json(['error' => $result['error'] ?? 'Failed to send message'], 422);
         }
 
-        $wamid = $result['messages'][0]['id'] ?? null;
+        $wamid = $result['data']['messages'][0]['id'] ?? null;
 
         // Find linked contact
         $phone = preg_replace('/[^0-9]/', '', $validated['phone']);
@@ -191,8 +191,8 @@ class WhatsAppController extends Controller
                 $result = $whatsApp->sendTextMessage($account, $cleanPhone, $validated['message']);
             }
 
-            if ($result) {
-                $wamid = $result['messages'][0]['id'] ?? null;
+            if ($result['success']) {
+                $wamid = $result['data']['messages'][0]['id'] ?? null;
                 $contact = Contact::where('phone', 'like', '%' . substr($cleanPhone, -10))->first();
 
                 WhatsAppMessage::create([

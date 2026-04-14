@@ -51,10 +51,14 @@ class WhatsAppService
     }
 
     /**
-     * Send a text message.
+     * Send a text message. Returns ['success' => bool, 'data' => ?array, 'error' => ?string].
      */
-    public function sendTextMessage(WhatsAppAccount $account, string $to, string $body): ?array
+    public function sendTextMessage(WhatsAppAccount $account, string $to, string $body): array
     {
+        if (empty($account->phone_number_id)) {
+            return ['success' => false, 'data' => null, 'error' => 'Account not connected: missing phone_number_id. Click Refresh on the account.'];
+        }
+
         $url = self::BASE_URL . '/' . self::API_VERSION . '/' . $account->phone_number_id . '/messages';
 
         $to = preg_replace('/[^0-9]/', '', $to);
@@ -72,25 +76,29 @@ class WhatsAppService
             ]);
 
         if (!$response->successful()) {
+            $err = $response->json('error.message', $response->body());
             Log::error('WhatsApp API: Failed to send message', [
                 'account_id' => $account->id,
                 'to' => $to,
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
-            return null;
+            return ['success' => false, 'data' => null, 'error' => $err];
         }
 
-        return $response->json();
+        return ['success' => true, 'data' => $response->json(), 'error' => null];
     }
 
     /**
      * Send a template message.
      */
-    public function sendTemplateMessage(WhatsAppAccount $account, string $to, string $templateName, string $languageCode = 'es_MX', array $components = []): ?array
+    public function sendTemplateMessage(WhatsAppAccount $account, string $to, string $templateName, string $languageCode = 'es_MX', array $components = []): array
     {
-        $url = self::BASE_URL . '/' . self::API_VERSION . '/' . $account->phone_number_id . '/messages';
+        if (empty($account->phone_number_id)) {
+            return ['success' => false, 'data' => null, 'error' => 'Account not connected.'];
+        }
 
+        $url = self::BASE_URL . '/' . self::API_VERSION . '/' . $account->phone_number_id . '/messages';
         $to = preg_replace('/[^0-9]/', '', $to);
 
         $payload = [
@@ -107,10 +115,10 @@ class WhatsAppService
             $payload['template']['components'] = $components;
         }
 
-        $response = Http::withToken($account->access_token)
-            ->post($url, $payload);
+        $response = Http::withToken($account->access_token)->post($url, $payload);
 
         if (!$response->successful()) {
+            $err = $response->json('error.message', $response->body());
             Log::error('WhatsApp API: Failed to send template', [
                 'account_id' => $account->id,
                 'to' => $to,
@@ -118,10 +126,10 @@ class WhatsAppService
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
-            return null;
+            return ['success' => false, 'data' => null, 'error' => $err];
         }
 
-        return $response->json();
+        return ['success' => true, 'data' => $response->json(), 'error' => null];
     }
 
     /**

@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class WhatsAppAccount extends Model
 {
+    protected $table = 'whatsapp_accounts';
+
     protected $fillable = [
         'name',
         'phone_number',
@@ -28,6 +30,6 @@ class WhatsAppAccount extends Model
 
     public function messages(): HasMany
     {
-        return $this->hasMany(WhatsAppMessage::class);
+        return $this->hasMany(WhatsAppMessage::class, 'whatsapp_account_id');
     }
 }

@@ -77,9 +77,12 @@ function scrollToBottom() {
     }
 }
 
+const sendError = ref('');
+
 async function sendMessage() {
     if (!newMessage.value.trim() || !activePhone.value || sending.value) return;
     sending.value = true;
+    sendError.value = '';
     try {
         const response = await axios.post(route('whatsapp.send', props.account.id), {
             phone: activePhone.value,
@@ -90,7 +93,8 @@ async function sendMessage() {
         await nextTick();
         scrollToBottom();
     } catch (e) {
-        console.error('Failed to send message', e);
+        sendError.value = e.response?.data?.error || 'Failed to send message';
+        setTimeout(() => { sendError.value = ''; }, 5000);
     } finally {
         sending.value = false;
     }
@@ -279,6 +283,11 @@ function formatDate(dateStr) {
                                 </span>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Error banner -->
+                    <div v-if="sendError" class="mx-3 mt-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                        {{ sendError }}
                     </div>
 
                     <!-- Input -->
