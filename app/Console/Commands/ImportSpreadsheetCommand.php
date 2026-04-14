@@ -112,6 +112,7 @@ class ImportSpreadsheetCommand extends Command
 
             $statusName = trim($row[3] ?? '');
             $labelName = trim($row[4] ?? '');
+            $name = trim($row[6] ?? '');
             $dateStr = trim($row[7] ?? '');
 
             // Resolve status_id
@@ -139,6 +140,7 @@ class ImportSpreadsheetCommand extends Command
 
             $contactData = [
                 'phone' => $phone,
+                'name' => $name ?: null,
                 'country' => $country,
                 'status_id' => $statusId,
                 'date' => $date,
@@ -148,9 +150,9 @@ class ImportSpreadsheetCommand extends Command
 
             $batch[] = $contactData;
 
-            // Track labels and status for this contact
+            // Track labels, status, name for this contact
             if (! isset($contactMeta[$phone])) {
-                $contactMeta[$phone] = ['labels' => [], 'status_id' => null];
+                $contactMeta[$phone] = ['labels' => [], 'status_id' => null, 'name' => null];
             }
             if ($labelName && isset($labelCache[$labelName])) {
                 if (! in_array($labelName, $contactMeta[$phone]['labels'])) {
@@ -159,6 +161,9 @@ class ImportSpreadsheetCommand extends Command
             }
             if ($statusId) {
                 $contactMeta[$phone]['status_id'] = $statusId;
+            }
+            if (!empty($name) && empty($contactMeta[$phone]['name'])) {
+                $contactMeta[$phone]['name'] = $name;
             }
 
             $rowCount++;
@@ -191,6 +196,28 @@ class ImportSpreadsheetCommand extends Command
         }
         $this->newLine();
         $this->info("Statuses set on {$statusUpdated} contacts.");
+
+        // Fill in names only where contact currently has no name (preserves manually-set names)
+        $this->info('Filling in missing names...');
+        $namesFilled = 0;
+        foreach ($contactMeta as $phone => $meta) {
+            if (empty($meta['name'])) {
+                continue;
+            }
+            $updated = Contact::where('phone', $phone)
+                ->where(function ($q) {
+                    $q->whereNull('name')->orWhere('name', '');
+                })
+                ->update(['name' => $meta['name']]);
+            if ($updated) {
+                $namesFilled++;
+                if ($namesFilled % 500 === 0) {
+                    $this->output->write("\rNames filled: {$namesFilled}");
+                }
+            }
+        }
+        $this->newLine();
+        $this->info("Names filled on {$namesFilled} contacts.");
 
         // Assign labels
         $this->info('Assigning labels to contacts...');
