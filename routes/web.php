@@ -84,6 +84,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/whatsapp/{account}/chat', [WhatsAppController::class, 'chat'])->name('whatsapp.chat');
         Route::get('/whatsapp/{account}/messages', [WhatsAppController::class, 'messages'])->name('whatsapp.messages');
         Route::get('/whatsapp/{account}/templates', [WhatsAppController::class, 'templates'])->name('whatsapp.templates');
+        Route::get('/whatsapp/{account}/templates-page', [WhatsAppController::class, 'templatesPage'])->name('whatsapp.templates-page');
     });
     Route::middleware('permission:whatsapp.manage')->group(function () {
         Route::post('/whatsapp', [WhatsAppController::class, 'store'])->name('whatsapp.store');
@@ -91,7 +92,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/whatsapp/{account}', [WhatsAppController::class, 'destroy'])->name('whatsapp.destroy');
         Route::post('/whatsapp/{account}/refresh', [WhatsAppController::class, 'refresh'])->name('whatsapp.refresh');
         Route::post('/whatsapp/{account}/send', [WhatsAppController::class, 'send'])->name('whatsapp.send');
+        Route::post('/whatsapp/{account}/send-template', [WhatsAppController::class, 'sendTemplate'])->name('whatsapp.send-template');
         Route::post('/whatsapp/{account}/bulk-send', [WhatsAppController::class, 'bulkSend'])->name('whatsapp.bulk-send');
+        Route::post('/whatsapp/{account}/templates', [WhatsAppController::class, 'createTemplate'])->name('whatsapp.templates.create');
+        Route::delete('/whatsapp/{account}/templates/{name}', [WhatsAppController::class, 'deleteTemplate'])->name('whatsapp.templates.delete');
     });
 
     // Profile (always accessible)

@@ -168,6 +168,7 @@ class WhatsAppController extends Controller
             'message' => 'required_if:type,text|nullable|string|max:4096',
             'template_name' => 'required_if:type,template|nullable|string',
             'language_code' => 'nullable|string',
+            'components' => 'nullable|array',
         ]);
 
         $sent = 0;
@@ -185,7 +186,8 @@ class WhatsAppController extends Controller
                     $account,
                     $cleanPhone,
                     $validated['template_name'],
-                    $validated['language_code'] ?? 'es_MX'
+                    $validated['language_code'] ?? 'es_MX',
+                    $validated['components'] ?? []
                 );
             } else {
                 $result = $whatsApp->sendTextMessage($account, $cleanPhone, $validated['message']);
@@ -224,5 +226,85 @@ class WhatsAppController extends Controller
         $templates = $whatsApp->fetchTemplates($account);
 
         return response()->json($templates);
+    }
+
+    public function templatesPage(WhatsAppAccount $account, WhatsAppService $whatsApp): Response
+    {
+        $templates = $whatsApp->fetchTemplates($account);
+
+        return Inertia::render('WhatsApp/Templates', [
+            'account' => $account->only(['id', 'name', 'phone_number', 'phone_number_id']),
+            'templates' => $templates,
+        ]);
+    }
+
+    public function createTemplate(WhatsAppAccount $account, Request $request, WhatsAppService $whatsApp): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|regex:/^[a-z0-9_]+$/|max:60',
+            'category' => 'required|in:MARKETING,UTILITY,AUTHENTICATION',
+            'language' => 'required|string|max:10',
+            'components' => 'required|array|min:1',
+        ]);
+
+        $result = $whatsApp->createTemplate($account, $validated);
+
+        if (!$result['success']) {
+            return response()->json(['error' => $result['error']], 422);
+        }
+
+        return response()->json($result['data']);
+    }
+
+    public function deleteTemplate(WhatsAppAccount $account, string $name, WhatsAppService $whatsApp): JsonResponse
+    {
+        $result = $whatsApp->deleteTemplate($account, $name);
+
+        if (!$result['success']) {
+            return response()->json(['error' => $result['error']], 422);
+        }
+
+        return response()->json(['deleted' => true]);
+    }
+
+    public function sendTemplate(WhatsAppAccount $account, Request $request, WhatsAppService $whatsApp): JsonResponse
+    {
+        $validated = $request->validate([
+            'phone' => 'required|string',
+            'template_name' => 'required|string',
+            'language_code' => 'required|string',
+            'components' => 'nullable|array',
+        ]);
+
+        $result = $whatsApp->sendTemplateMessage(
+            $account,
+            $validated['phone'],
+            $validated['template_name'],
+            $validated['language_code'],
+            $validated['components'] ?? []
+        );
+
+        if (!$result['success']) {
+            return response()->json(['error' => $result['error']], 422);
+        }
+
+        $wamid = $result['data']['messages'][0]['id'] ?? null;
+        $cleanPhone = preg_replace('/[^0-9]/', '', $validated['phone']);
+        $contact = Contact::where('phone', 'like', '%' . substr($cleanPhone, -10))->first();
+
+        $msg = WhatsAppMessage::create([
+            'whatsapp_account_id' => $account->id,
+            'contact_id' => $contact?->id,
+            'remote_phone' => $cleanPhone,
+            'direction' => 'outbound',
+            'type' => 'template',
+            'template_name' => $validated['template_name'],
+            'content' => '[template: ' . $validated['template_name'] . ']',
+            'wamid' => $wamid,
+            'status' => 'sent',
+            'sent_at' => now(),
+        ]);
+
+        return response()->json($msg);
     }
 }

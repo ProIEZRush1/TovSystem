@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { useI18n } from 'vue-i18n';
 import { usePermissions } from '@/composables/usePermissions';
@@ -31,6 +31,64 @@ const bulkTemplateName = ref('');
 const bulkLanguage = ref('es_MX');
 const bulkSending = ref(false);
 const bulkResult = ref(null);
+
+// Templates
+const availableTemplates = ref([]);
+const templatesLoading = ref(false);
+const templateParams = ref({}); // param_name => value
+const selectedTemplate = computed(() => availableTemplates.value.find(t => t.name === bulkTemplateName.value));
+const selectedBodyParams = computed(() => {
+    if (!selectedTemplate.value) return [];
+    const body = (selectedTemplate.value.components || []).find(c => c.type === 'BODY');
+    if (!body) return [];
+    const matches = (body.text || '').match(/\{\{([a-z0-9_]+)\}\}/gi) || [];
+    return [...new Set(matches.map(m => m.replace(/[{}]/g, '')))];
+});
+const selectedHasFlowButton = computed(() => {
+    if (!selectedTemplate.value) return false;
+    const buttonsComp = (selectedTemplate.value.components || []).find(c => c.type === 'BUTTONS');
+    return !!(buttonsComp?.buttons || []).find(b => b.type === 'FLOW');
+});
+
+async function loadTemplates() {
+    if (templatesLoading.value) return;
+    templatesLoading.value = true;
+    try {
+        const r = await axios.get(route('whatsapp.templates', props.account.id));
+        availableTemplates.value = (r.data || []).filter(t => t.status === 'APPROVED');
+    } catch (e) {
+        console.error('Failed to load templates', e);
+    } finally {
+        templatesLoading.value = false;
+    }
+}
+
+function paramLabel(p) {
+    return '{{' + p + '}}';
+}
+
+function buildTemplateComponents() {
+    const components = [];
+    if (selectedBodyParams.value.length) {
+        components.push({
+            type: 'body',
+            parameters: selectedBodyParams.value.map(p => ({
+                type: 'text',
+                parameter_name: p,
+                text: templateParams.value[p] || '',
+            })),
+        });
+    }
+    if (selectedHasFlowButton.value) {
+        components.push({
+            type: 'button',
+            sub_type: 'flow',
+            index: '0',
+            parameters: [{ type: 'action', action: { flow_token: 'tov_' + Date.now() } }],
+        });
+    }
+    return components;
+}
 
 // Polling for new messages
 let pollInterval = null;
@@ -154,20 +212,38 @@ async function submitBulkSend() {
     bulkSending.value = true;
     bulkResult.value = null;
     try {
-        const response = await axios.post(route('whatsapp.bulk-send', props.account.id), {
+        const payload = {
             phones,
             type: bulkType.value,
             message: bulkMessage.value || null,
             template_name: bulkTemplateName.value || null,
             language_code: bulkLanguage.value,
-        });
+        };
+        if (bulkType.value === 'template') {
+            payload.components = buildTemplateComponents();
+            payload.language_code = selectedTemplate.value?.language || bulkLanguage.value;
+        }
+        const response = await axios.post(route('whatsapp.bulk-send', props.account.id), payload);
         bulkResult.value = response.data;
     } catch (e) {
-        console.error('Bulk send failed', e);
+        bulkResult.value = { error: e.response?.data?.error || 'Bulk send failed' };
     } finally {
         bulkSending.value = false;
     }
 }
+
+// Load templates when switching to template mode or opening modal
+watch(bulkType, (val) => {
+    if (val === 'template' && !availableTemplates.value.length) loadTemplates();
+});
+watch(showBulkSend, (val) => {
+    if (val && bulkType.value === 'template' && !availableTemplates.value.length) loadTemplates();
+});
+
+// Reset params when template changes
+watch(bulkTemplateName, () => {
+    templateParams.value = {};
+});
 
 function formatTime(dateStr) {
     if (!dateStr) return '';
@@ -362,22 +438,37 @@ function formatDate(dateStr) {
                                 <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('whatsapp.typeMessage') }}</label>
                                 <textarea v-model="bulkMessage" rows="3" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500"></textarea>
                             </div>
-                            <div v-if="bulkType === 'template'" class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('whatsapp.templateName') }}</label>
-                                    <input v-model="bulkTemplateName" type="text" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" placeholder="hello_world" />
+                            <div v-if="bulkType === 'template'">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('whatsapp.templateName') }}</label>
+                                <select v-model="bulkTemplateName" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500">
+                                    <option value="">{{ templatesLoading ? t('common.loading') : t('whatsapp.tplSelect') }}</option>
+                                    <option v-for="tpl in availableTemplates" :key="tpl.id" :value="tpl.name">
+                                        {{ tpl.name }} ({{ tpl.language }}) — {{ tpl.category }}
+                                    </option>
+                                </select>
+                                <div class="mt-1 flex items-center justify-between">
+                                    <p class="text-xs text-slate-500">{{ t('whatsapp.tplSelectHint') }}</p>
+                                    <Link :href="route('whatsapp.templates-page', account.id)" class="text-xs text-brand-600 hover:text-brand-500">{{ t('whatsapp.tplManage') }} →</Link>
                                 </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('whatsapp.language') }}</label>
-                                    <input v-model="bulkLanguage" type="text" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" />
+
+                                <!-- Dynamic parameter inputs -->
+                                <div v-if="selectedBodyParams.length" class="mt-3 space-y-2 rounded-lg bg-slate-50 border border-slate-200 p-3">
+                                    <p class="text-xs font-medium text-slate-600">{{ t('whatsapp.tplFillParams') }}</p>
+                                    <div v-for="p in selectedBodyParams" :key="p" class="flex items-center gap-2">
+                                        <label class="text-xs font-mono text-slate-500 w-32 shrink-0">{{ paramLabel(p) }}</label>
+                                        <input v-model="templateParams[p]" type="text" class="flex-1 rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" />
+                                    </div>
                                 </div>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('whatsapp.selectContacts') }}</label>
                                 <textarea v-model="bulkPhones" rows="6" class="block w-full rounded-lg border-slate-300 text-sm font-mono focus:border-brand-500 focus:ring-brand-500" placeholder="+5215512345678&#10;+5215587654321"></textarea>
                             </div>
-                            <div v-if="bulkResult" class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm">
+                            <div v-if="bulkResult && !bulkResult.error" class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm">
                                 <p class="font-medium text-green-800">{{ t('whatsapp.bulkResult', { sent: bulkResult.sent, failed: bulkResult.failed }) }}</p>
+                            </div>
+                            <div v-if="bulkResult?.error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                                {{ bulkResult.error }}
                             </div>
                         </div>
                         <div class="border-t border-slate-100 px-6 py-4 flex justify-end gap-3">

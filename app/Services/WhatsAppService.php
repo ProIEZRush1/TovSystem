@@ -152,4 +152,46 @@ class WhatsAppService
 
         return $response->json('data', []);
     }
+
+    /**
+     * Create a message template on Meta.
+     * Templates go through Meta's review process before they can be used.
+     */
+    public function createTemplate(WhatsAppAccount $account, array $payload): array
+    {
+        $url = self::BASE_URL . '/' . self::API_VERSION . '/' . $account->waba_id . '/message_templates';
+
+        $response = Http::withToken($account->access_token)->post($url, $payload);
+
+        if (!$response->successful()) {
+            $err = $response->json('error.message', $response->body());
+            Log::error('WhatsApp API: Failed to create template', [
+                'account_id' => $account->id,
+                'name' => $payload['name'] ?? null,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+            return ['success' => false, 'data' => null, 'error' => $err];
+        }
+
+        return ['success' => true, 'data' => $response->json(), 'error' => null];
+    }
+
+    /**
+     * Delete a message template by name.
+     */
+    public function deleteTemplate(WhatsAppAccount $account, string $name): array
+    {
+        $url = self::BASE_URL . '/' . self::API_VERSION . '/' . $account->waba_id . '/message_templates';
+
+        $response = Http::withToken($account->access_token)
+            ->delete($url, ['name' => $name]);
+
+        if (!$response->successful()) {
+            $err = $response->json('error.message', $response->body());
+            return ['success' => false, 'data' => null, 'error' => $err];
+        }
+
+        return ['success' => true, 'data' => $response->json(), 'error' => null];
+    }
 }
