@@ -250,10 +250,23 @@ class PhoneCountryHelper
      */
     public static function normalize(string $phone): string
     {
-        $phone = preg_replace('/[\s\-\(\)]/', '', $phone);
+        $phone = preg_replace('/[\s\-\(\)\.]/', '', $phone);
 
-        if (! str_starts_with($phone, '+')) {
+        $hadPlus = str_starts_with($phone, '+');
+        if (! $hadPlus) {
             $phone = '+' . $phone;
+        }
+
+        // If user entered exactly 10 digits (no country code), assume MX mobile
+        // and prepend +521 (most common case for this project).
+        if (! $hadPlus && preg_match('/^\+(\d{10})$/', $phone, $m)) {
+            return '+521' . $m[1];
+        }
+
+        // Mexico: WhatsApp requires the "1" mobile prefix after country code 52.
+        // +52 followed by exactly 10 digits -> treat as mobile and insert the 1.
+        if (preg_match('/^\+52(\d{10})$/', $phone, $m)) {
+            $phone = '+521' . $m[1];
         }
 
         return $phone;
