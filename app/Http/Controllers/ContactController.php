@@ -173,6 +173,51 @@ class ContactController extends Controller
         return back()->with('success', count($validated['ids']) . ' contacts updated.');
     }
 
+    /**
+     * Parse a free-form "phones pasted by user" line into [phone, name].
+     * Supports comma-separated and whitespace-separated, in either order.
+     * Returns [null, null] if no valid phone is found.
+     */
+    private function parsePhoneLine(string $line): array
+    {
+        $line = trim($line);
+        if ($line === '') {
+            return [null, null];
+        }
+
+        // 1) Comma-separated: pick the side with more digits as the phone.
+        if (str_contains($line, ',')) {
+            $parts = explode(',', $line, 2);
+            $first = trim($parts[0]);
+            $second = trim($parts[1]);
+
+            $digitsOf = fn ($s) => preg_match_all('/\d/', $s);
+            $dFirst = $digitsOf($first);
+            $dSecond = $digitsOf($second);
+
+            if ($dSecond >= 7 && $dSecond >= $dFirst) {
+                return [$second, $first !== '' ? $first : null];
+            }
+            if ($dFirst >= 7) {
+                return [$first, $second !== '' ? $second : null];
+            }
+            // Fall through - no valid phone in comma-separated parts.
+        }
+
+        // 2) No comma (or comma didn't yield a phone): find the longest
+        //    digit-heavy token and treat it as the phone; the rest is name.
+        if (preg_match('/(\+?[\d][\d\s\-\(\)\.]{5,})/', $line, $m, PREG_OFFSET_CAPTURE)) {
+            $phoneRaw = trim($m[1][0]);
+            $offset = $m[1][1];
+            $namePart = trim(substr($line, 0, $offset) . ' ' . substr($line, $offset + strlen($m[1][0])));
+            if (preg_match_all('/\d/', $phoneRaw) >= 7) {
+                return [$phoneRaw, $namePart !== '' ? $namePart : null];
+            }
+        }
+
+        return [null, null];
+    }
+
     public function quickAdd(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -192,21 +237,17 @@ class ContactController extends Controller
         $skipped = 0;
 
         foreach ($lines as $line) {
-            // Parse line: could be "Name, +phone" or ", +phone" or just "+phone"
-            $name = null;
-            $phone = $line;
-
-            if (str_contains($line, ',')) {
-                $parts = explode(',', $line, 2);
-                $namePart = trim($parts[0]);
-                $phonePart = trim($parts[1]);
-
-                if (!empty($phonePart)) {
-                    $phone = $phonePart;
-                    if (!empty($namePart)) {
-                        $name = $namePart;
-                    }
-                }
+            // Parse line. Accepted formats:
+            //   "+5215512345678"                    -> phone only
+            //   "Name, +5215512345678"               -> name , phone
+            //   ", +5215512345678"                   -> , phone
+            //   "+5215512345678, Name"               -> phone , name
+            //   "5215512345678 Margalit Hamui"       -> phone <whitespace> name
+            //   "Margalit Hamui 5215512345678"       -> name <whitespace> phone (last token is digits)
+            [$phone, $name] = $this->parsePhoneLine($line);
+            if (!$phone) {
+                $skipped++;
+                continue;
             }
 
             $phone = PhoneCountryHelper::normalize($phone);
