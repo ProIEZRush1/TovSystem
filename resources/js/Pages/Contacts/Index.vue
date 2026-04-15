@@ -43,6 +43,7 @@ const quickAddStatusId = ref('');
 const quickAddDate = ref('');
 const quickAddLabelIds = ref([]);
 const quickAddSource = ref('');
+const quickAddOnlyNew = ref(true);
 const quickAddLoading = ref(false);
 const quickAddResult = ref(null);
 
@@ -375,6 +376,7 @@ async function submitQuickAdd() {
             date: quickAddDate.value || null,
             label_ids: quickAddLabelIds.value,
             source: quickAddSource.value || null,
+            only_new: quickAddOnlyNew.value,
         });
         quickAddResult.value = response.data;
         quickAddPhones.value = '';
@@ -679,6 +681,15 @@ async function submitQuickAdd() {
                                 <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('contacts.source') }}</label>
                                 <input type="text" v-model="quickAddSource" maxlength="100" class="block w-full rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500" :placeholder="t('contacts.sourcePlaceholder')" />
                             </div>
+
+                            <!-- Only new toggle -->
+                            <label class="flex items-start gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 cursor-pointer">
+                                <input type="checkbox" v-model="quickAddOnlyNew" class="h-5 w-5 mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                <div>
+                                    <p class="text-sm font-medium text-slate-900">{{ t('contacts.onlyNew') }}</p>
+                                    <p class="text-xs text-slate-600 mt-0.5">{{ t('contacts.onlyNewHint') }}</p>
+                                </div>
+                            </label>
 
                             <!-- Result feedback -->
                             <div v-if="quickAddResult" class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm">

@@ -62,7 +62,9 @@
         "quickAddCreated": "{count} nuevos",
         "quickAddUpdated": "{count} actualizados",
         "quickAddSkipped": "{count} ya existian",
-        "sourcePlaceholder": "Ej. Formulario web, Evento, Referido..."
+        "sourcePlaceholder": "Ej. Formulario web, Evento, Referido...",
+        "onlyNew": "Solo aplicar a contactos nuevos",
+        "onlyNewHint": "Si activado, los telefonos que ya existen se dejan sin cambios (conservan su estado, etiquetas y fecha actuales). Solo se aplican los datos a los que realmente son nuevos."
     },
     "labels": {
         "title": "Etiquetas",

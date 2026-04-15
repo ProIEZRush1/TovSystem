@@ -182,8 +182,10 @@ class ContactController extends Controller
             'label_ids' => 'nullable|array',
             'label_ids.*' => 'integer|exists:labels,id',
             'source' => 'nullable|string|max:100',
+            'only_new' => 'nullable|boolean',
         ]);
 
+        $onlyNew = !empty($validated['only_new']);
         $lines = array_filter(array_map('trim', explode("\n", $validated['phones'])));
         $created = 0;
         $updated = 0;
@@ -215,9 +217,15 @@ class ContactController extends Controller
             }
 
             $existing = Contact::where('phone', $phone)->first();
+            $isNew = false;
             $target = null;
 
             if ($existing) {
+                if ($onlyNew) {
+                    // Leave existing contact completely untouched
+                    $skipped++;
+                    continue;
+                }
                 // Update name if new entry has one and existing doesn't
                 $changed = false;
                 if (!empty($name) && empty($existing->name)) {
@@ -239,11 +247,10 @@ class ContactController extends Controller
                 if ($changed) {
                     $existing->save();
                     $updated++;
-                    $target = $existing;
                 } else {
                     $skipped++;
-                    $target = $existing;
                 }
+                $target = $existing;
             } else {
                 $country = PhoneCountryHelper::detectCountry($phone);
                 $target = Contact::create([
@@ -255,11 +262,14 @@ class ContactController extends Controller
                     'source' => $validated['source'] ?? null,
                 ]);
                 $created++;
+                $isNew = true;
             }
 
-            // Attach labels to every processed contact (idempotent)
+            // Attach labels. If only_new is true, only attach to newly created contacts.
             if ($target && !empty($validated['label_ids'])) {
-                $target->labels()->syncWithoutDetaching($validated['label_ids']);
+                if (!$onlyNew || $isNew) {
+                    $target->labels()->syncWithoutDetaching($validated['label_ids']);
+                }
             }
         }
 
