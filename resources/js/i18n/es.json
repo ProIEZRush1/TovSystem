@@ -61,7 +61,8 @@
         "quickAddDone": "Telefonos procesados",
         "quickAddCreated": "{count} nuevos",
         "quickAddUpdated": "{count} actualizados",
-        "quickAddSkipped": "{count} ya existian"
+        "quickAddSkipped": "{count} ya existian",
+        "sourcePlaceholder": "Ej. Formulario web, Evento, Referido..."
     },
     "labels": {
         "title": "Etiquetas",

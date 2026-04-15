@@ -41,8 +41,16 @@ const showQuickAdd = ref(false);
 const quickAddPhones = ref('');
 const quickAddStatusId = ref('');
 const quickAddDate = ref('');
+const quickAddLabelIds = ref([]);
+const quickAddSource = ref('');
 const quickAddLoading = ref(false);
 const quickAddResult = ref(null);
+
+function toggleQuickAddLabel(id) {
+    const i = quickAddLabelIds.value.indexOf(id);
+    if (i >= 0) quickAddLabelIds.value.splice(i, 1);
+    else quickAddLabelIds.value.push(id);
+}
 
 // Drag-to-select state
 let isDragging = false;
@@ -365,6 +373,8 @@ async function submitQuickAdd() {
             phones: quickAddPhones.value,
             status_id: quickAddStatusId.value || null,
             date: quickAddDate.value || null,
+            label_ids: quickAddLabelIds.value,
+            source: quickAddSource.value || null,
         });
         quickAddResult.value = response.data;
         quickAddPhones.value = '';
@@ -639,6 +649,35 @@ async function submitQuickAdd() {
                                     <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('contacts.date') }}</label>
                                     <input type="date" v-model="quickAddDate" class="block w-full rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500" />
                                 </div>
+                            </div>
+
+                            <!-- Labels (Etiquetas) -->
+                            <div v-if="labels?.length">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('labels.title') }}</label>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        v-for="l in labels"
+                                        :key="l.id"
+                                        type="button"
+                                        @click="toggleQuickAddLabel(l.id)"
+                                        :class="[
+                                            'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium border-2 transition cursor-pointer',
+                                            quickAddLabelIds.includes(l.id) ? 'border-current shadow-sm' : 'border-transparent opacity-50 hover:opacity-75'
+                                        ]"
+                                        :style="{ backgroundColor: l.color + '20', color: l.color }"
+                                    >
+                                        <svg v-if="quickAddLabelIds.includes(l.id)" class="h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="3" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                                        </svg>
+                                        {{ l.name }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Source (Fuente) -->
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('contacts.source') }}</label>
+                                <input type="text" v-model="quickAddSource" maxlength="100" class="block w-full rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500" :placeholder="t('contacts.sourcePlaceholder')" />
                             </div>
 
                             <!-- Result feedback -->

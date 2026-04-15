@@ -179,6 +179,9 @@ class ContactController extends Controller
             'phones' => 'required|string',
             'status_id' => 'nullable|exists:statuses,id',
             'date' => 'nullable|date',
+            'label_ids' => 'nullable|array',
+            'label_ids.*' => 'integer|exists:labels,id',
+            'source' => 'nullable|string|max:100',
         ]);
 
         $lines = array_filter(array_map('trim', explode("\n", $validated['phones'])));
@@ -212,6 +215,7 @@ class ContactController extends Controller
             }
 
             $existing = Contact::where('phone', $phone)->first();
+            $target = null;
 
             if ($existing) {
                 // Update name if new entry has one and existing doesn't
@@ -228,22 +232,34 @@ class ContactController extends Controller
                     $existing->date = $validated['date'];
                     $changed = true;
                 }
+                if (!empty($validated['source']) && empty($existing->source)) {
+                    $existing->source = $validated['source'];
+                    $changed = true;
+                }
                 if ($changed) {
                     $existing->save();
                     $updated++;
+                    $target = $existing;
                 } else {
                     $skipped++;
+                    $target = $existing;
                 }
             } else {
                 $country = PhoneCountryHelper::detectCountry($phone);
-                Contact::create([
+                $target = Contact::create([
                     'phone' => $phone,
                     'name' => $name,
                     'country' => $country,
                     'status_id' => $validated['status_id'] ?? null,
                     'date' => $validated['date'] ?? null,
+                    'source' => $validated['source'] ?? null,
                 ]);
                 $created++;
+            }
+
+            // Attach labels to every processed contact (idempotent)
+            if ($target && !empty($validated['label_ids'])) {
+                $target->labels()->syncWithoutDetaching($validated['label_ids']);
             }
         }
 

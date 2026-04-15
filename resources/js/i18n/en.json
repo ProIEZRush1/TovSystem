@@ -61,7 +61,8 @@
         "quickAddDone": "Phones processed",
         "quickAddCreated": "{count} new",
         "quickAddUpdated": "{count} updated",
-        "quickAddSkipped": "{count} already existed"
+        "quickAddSkipped": "{count} already existed",
+        "sourcePlaceholder": "e.g. Web form, Event, Referral..."
     },
     "labels": {
         "title": "Labels",
