@@ -185,37 +185,26 @@ class ContactController extends Controller
             return [null, null];
         }
 
-        // 1) Comma-separated: pick the side with more digits as the phone.
-        if (str_contains($line, ',')) {
-            $parts = explode(',', $line, 2);
-            $first = trim($parts[0]);
-            $second = trim($parts[1]);
-
-            $digitsOf = fn ($s) => preg_match_all('/\d/', $s);
-            $dFirst = $digitsOf($first);
-            $dSecond = $digitsOf($second);
-
-            if ($dSecond >= 7 && $dSecond >= $dFirst) {
-                return [$second, $first !== '' ? $first : null];
-            }
-            if ($dFirst >= 7) {
-                return [$first, $second !== '' ? $second : null];
-            }
-            // Fall through - no valid phone in comma-separated parts.
+        // Find a phone-shaped token anywhere in the line (optionally leading +,
+        // then digits with optional spaces/dashes/dots/parens in between).
+        // The captured group is the raw phone; everything else on the line
+        // (minus commas) is the name.
+        if (!preg_match('/(\+?\d(?:[\d\s\-\(\)\.]{5,}))/', $line, $m, PREG_OFFSET_CAPTURE)) {
+            return [null, null];
         }
 
-        // 2) No comma (or comma didn't yield a phone): find the longest
-        //    digit-heavy token and treat it as the phone; the rest is name.
-        if (preg_match('/(\+?[\d][\d\s\-\(\)\.]{5,})/', $line, $m, PREG_OFFSET_CAPTURE)) {
-            $phoneRaw = trim($m[1][0]);
-            $offset = $m[1][1];
-            $namePart = trim(substr($line, 0, $offset) . ' ' . substr($line, $offset + strlen($m[1][0])));
-            if (preg_match_all('/\d/', $phoneRaw) >= 7) {
-                return [$phoneRaw, $namePart !== '' ? $namePart : null];
-            }
+        $phoneRaw = rtrim($m[1][0], " \t\-\.\(\)");
+        $phoneRaw = trim($phoneRaw);
+        if (preg_match_all('/\d/', $phoneRaw) < 7) {
+            return [null, null];
         }
 
-        return [null, null];
+        $offset = $m[1][1];
+        $namePart = substr($line, 0, $offset) . ' ' . substr($line, $offset + strlen($m[1][0]));
+        // Remove commas from the name and collapse whitespace.
+        $namePart = trim(preg_replace('/\s+/', ' ', str_replace(',', ' ', $namePart)));
+
+        return [$phoneRaw, $namePart !== '' ? $namePart : null];
     }
 
     public function quickAdd(Request $request): JsonResponse
@@ -252,7 +241,14 @@ class ContactController extends Controller
 
             $phone = PhoneCountryHelper::normalize($phone);
 
-            if (strlen(preg_replace('/[^0-9]/', '', $phone)) < 7) {
+            // Sanity: phones shouldn't contain letters. If they do, the parser
+            // failed — skip this row rather than poison the whole batch.
+            if (preg_match('/[a-zA-Z]/', $phone)) {
+                $skipped++;
+                continue;
+            }
+
+            if (strlen($phone) > 30 || strlen(preg_replace('/[^0-9]/', '', $phone)) < 7) {
                 $skipped++;
                 continue;
             }
