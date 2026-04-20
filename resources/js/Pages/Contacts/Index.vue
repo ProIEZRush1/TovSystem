@@ -275,6 +275,7 @@ function bulkUpdateStatus() {
         onSuccess: () => {
             selectedIds.value = [];
             bulkStatusId.value = '';
+            loadRecentOps();
         },
     });
 }
@@ -288,6 +289,7 @@ function bulkUpdateDate() {
         onSuccess: () => {
             selectedIds.value = [];
             bulkDateValue.value = '';
+            loadRecentOps();
         },
     });
 }
@@ -302,6 +304,7 @@ function bulkUpdateLabels() {
         onSuccess: () => {
             selectedIds.value = [];
             bulkLabelId.value = '';
+            loadRecentOps();
         },
     });
 }
@@ -382,12 +385,59 @@ async function submitQuickAdd() {
         quickAddPhones.value = '';
         // Reload contacts list
         router.reload({ only: ['contacts'] });
+        loadRecentOps();
     } catch (e) {
         console.error('Quick add failed', e);
     } finally {
         quickAddLoading.value = false;
     }
 }
+
+// Undo system
+const recentOps = ref([]);
+const showOpsMenu = ref(false);
+const undoingId = ref(null);
+
+async function loadRecentOps() {
+    try {
+        const r = await axios.get(route('contacts.recent-operations'));
+        recentOps.value = r.data || [];
+    } catch (_) {}
+}
+
+async function undoOp(op) {
+    if (!confirm(t('contacts.confirmUndo', { description: op.description }))) return;
+    undoingId.value = op.id;
+    try {
+        await axios.post(route('contacts.undo-operation', op.id));
+        await loadRecentOps();
+        router.reload({ only: ['contacts'] });
+    } catch (e) {
+        console.error('Undo failed', e);
+    } finally {
+        undoingId.value = null;
+    }
+}
+
+function formatOpTime(t) {
+    if (!t) return '';
+    const d = new Date(t);
+    const diffMin = Math.round((Date.now() - d.getTime()) / 60000);
+    if (diffMin < 1) return 'ahora';
+    if (diffMin < 60) return `hace ${diffMin} min`;
+    const h = Math.round(diffMin / 60);
+    if (h < 24) return `hace ${h} h`;
+    return d.toLocaleDateString();
+}
+
+onMounted(() => { loadRecentOps(); });
+
+// Refresh recent ops whenever bulk buttons succeed. Simpler: poll every 30s.
+let opsInterval = null;
+onMounted(() => {
+    opsInterval = setInterval(loadRecentOps, 30000);
+});
+onUnmounted(() => { if (opsInterval) clearInterval(opsInterval); });
 </script>
 
 <template>
@@ -398,6 +448,32 @@ async function submitQuickAdd() {
             <div class="flex items-center justify-between">
                 <h2 class="text-xl font-bold text-slate-900">{{ t('contacts.title') }}</h2>
                 <div class="flex items-center gap-2">
+                    <!-- Undo dropdown -->
+                    <div v-if="recentOps.length" class="relative">
+                        <button @click="showOpsMenu = !showOpsMenu" class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition">
+                            <svg class="h-4 w-4 text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+                            </svg>
+                            {{ t('contacts.undo') }}
+                            <span class="inline-flex items-center justify-center rounded-full bg-brand-50 text-brand-700 px-1.5 text-xs font-bold">{{ recentOps.length }}</span>
+                        </button>
+                        <div v-if="showOpsMenu" @click.self="showOpsMenu = false" class="fixed inset-0 z-40" />
+                        <div v-if="showOpsMenu" class="absolute right-0 mt-1 z-50 w-96 rounded-lg bg-white shadow-xl ring-1 ring-slate-900/10 overflow-hidden">
+                            <div class="px-4 py-2 border-b border-slate-100 text-xs font-medium text-slate-500 uppercase">{{ t('contacts.recentOperations') }}</div>
+                            <div class="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                                <div v-for="op in recentOps" :key="op.id" class="px-4 py-3 hover:bg-slate-50 flex items-start justify-between gap-3">
+                                    <div class="min-w-0 flex-1">
+                                        <p class="text-sm text-slate-900 truncate">{{ op.description }}</p>
+                                        <p class="text-xs text-slate-400 mt-0.5">{{ formatOpTime(op.created_at) }}</p>
+                                    </div>
+                                    <button @click="undoOp(op)" :disabled="undoingId === op.id" class="shrink-0 rounded-md bg-red-50 border border-red-200 text-red-700 px-2.5 py-1 text-xs font-semibold hover:bg-red-100 disabled:opacity-50 transition">
+                                        {{ undoingId === op.id ? t('common.loading') : t('contacts.undoAction') }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <button v-if="can('import.manage')" @click="showQuickAdd = true" class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-500 transition">
                         <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />

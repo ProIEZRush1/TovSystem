@@ -63,6 +63,10 @@
         "quickAddUpdated": "{count} updated",
         "quickAddSkipped": "{count} already existed",
         "sourcePlaceholder": "e.g. Web form, Event, Referral...",
+        "undo": "Undo",
+        "undoAction": "Undo",
+        "recentOperations": "Recent operations",
+        "confirmUndo": "Undo this action?\n\n{description}\n\nAll changes it made will be reverted.",
         "onlyNew": "Only apply to new contacts",
         "onlyNewHint": "When checked, existing phones are left untouched (they keep their current status, labels and date). Data only applies to truly new contacts."
     },

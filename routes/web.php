@@ -48,6 +48,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/contacts/quick-add', [ContactController::class, 'quickAdd'])
         ->name('contacts.quick-add')
         ->middleware('permission:import.manage');
+    Route::get('/contacts/recent-operations', [ContactController::class, 'recentOperations'])
+        ->name('contacts.recent-operations')
+        ->middleware('permission:contacts.bulk_status');
+    Route::post('/contacts/undo-operation/{operation}', [ContactController::class, 'undoOperation'])
+        ->name('contacts.undo-operation')
+        ->middleware('permission:contacts.bulk_status');
 
     // Labels
     Route::get('/labels', [LabelController::class, 'index'])

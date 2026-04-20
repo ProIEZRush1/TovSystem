@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\PhoneCountryHelper;
+use App\Models\BulkOperation;
 use App\Models\Contact;
 use App\Models\Label;
 use App\Models\Status;
 use App\Services\ContactExportService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -130,8 +132,19 @@ class ContactController extends Controller
             'status_id' => 'required|exists:statuses,id',
         ]);
 
+        // Snapshot previous status for undo.
+        $previous = Contact::whereIn('id', $validated['ids'])->pluck('status_id', 'id')->toArray();
+
         Contact::whereIn('id', $validated['ids'])
             ->update(['status_id' => $validated['status_id']]);
+
+        $statusName = Status::where('id', $validated['status_id'])->value('name');
+        BulkOperation::create([
+            'user_id' => $request->user()?->id,
+            'type' => 'bulk_status',
+            'description' => count($validated['ids']) . " contactos cambiados a estado \"{$statusName}\"",
+            'payload' => ['previous' => $previous],
+        ]);
 
         return back()->with('success', count($validated['ids']) . ' contacts updated.');
     }
@@ -144,8 +157,21 @@ class ContactController extends Controller
             'date' => 'nullable|date',
         ]);
 
+        $previous = Contact::whereIn('id', $validated['ids'])
+            ->get(['id', 'date'])
+            ->pluck('date', 'id')
+            ->map(fn ($d) => $d?->format('Y-m-d'))
+            ->toArray();
+
         Contact::whereIn('id', $validated['ids'])
             ->update(['date' => $validated['date'] ?? null]);
+
+        BulkOperation::create([
+            'user_id' => $request->user()?->id,
+            'type' => 'bulk_date',
+            'description' => count($validated['ids']) . ' contactos con fecha "' . ($validated['date'] ?? 'vacia') . '"',
+            'payload' => ['previous' => $previous],
+        ]);
 
         return back()->with('success', count($validated['ids']) . ' contacts updated.');
     }
@@ -162,6 +188,13 @@ class ContactController extends Controller
 
         $contacts = Contact::whereIn('id', $validated['ids'])->get();
 
+        // For attach: remember which (contact_id, label_id) pairs already existed
+        // so undo only detaches the ones WE added.
+        $existingBefore = [];
+        foreach ($contacts as $contact) {
+            $existingBefore[$contact->id] = $contact->labels()->pluck('labels.id')->toArray();
+        }
+
         foreach ($contacts as $contact) {
             if ($validated['action'] === 'attach') {
                 $contact->labels()->syncWithoutDetaching($validated['label_ids']);
@@ -169,6 +202,19 @@ class ContactController extends Controller
                 $contact->labels()->detach($validated['label_ids']);
             }
         }
+
+        $labelNames = Label::whereIn('id', $validated['label_ids'])->pluck('name')->implode(', ');
+        $verb = $validated['action'] === 'attach' ? 'etiquetado' : 'quitada etiqueta';
+        BulkOperation::create([
+            'user_id' => $request->user()?->id,
+            'type' => 'bulk_labels',
+            'description' => count($validated['ids']) . " contactos {$verb} \"{$labelNames}\"",
+            'payload' => [
+                'action' => $validated['action'],
+                'label_ids' => $validated['label_ids'],
+                'existing_before' => $existingBefore,
+            ],
+        ]);
 
         return back()->with('success', count($validated['ids']) . ' contacts updated.');
     }
@@ -225,6 +271,11 @@ class ContactController extends Controller
         $updated = 0;
         $skipped = 0;
 
+        // For undo: track new contact IDs + snapshots of updated contacts + labels we attached
+        $createdIds = [];
+        $updatedSnapshots = []; // id => [field => previous_value]
+        $labelsAttached = [];   // contact_id => [label_ids actually newly attached]
+
         foreach ($lines as $line) {
             // Parse line. Accepted formats:
             //   "+5215512345678"                    -> phone only
@@ -263,27 +314,33 @@ class ContactController extends Controller
                     $skipped++;
                     continue;
                 }
-                // Update name if new entry has one and existing doesn't
+                // Snapshot for undo (only fields we might change)
+                $snapshot = [];
                 $changed = false;
                 if (!empty($name) && empty($existing->name)) {
+                    $snapshot['name'] = $existing->name;
                     $existing->name = $name;
                     $changed = true;
                 }
                 if (!is_null($validated['status_id']) && is_null($existing->status_id)) {
+                    $snapshot['status_id'] = $existing->status_id;
                     $existing->status_id = $validated['status_id'];
                     $changed = true;
                 }
                 if (!empty($validated['date']) && is_null($existing->date)) {
+                    $snapshot['date'] = $existing->date?->format('Y-m-d');
                     $existing->date = $validated['date'];
                     $changed = true;
                 }
                 if (!empty($validated['source']) && empty($existing->source)) {
+                    $snapshot['source'] = $existing->source;
                     $existing->source = $validated['source'];
                     $changed = true;
                 }
                 if ($changed) {
                     $existing->save();
                     $updated++;
+                    $updatedSnapshots[$existing->id] = $snapshot;
                 } else {
                     $skipped++;
                 }
@@ -300,14 +357,37 @@ class ContactController extends Controller
                 ]);
                 $created++;
                 $isNew = true;
+                $createdIds[] = $target->id;
             }
 
             // Attach labels. If only_new is true, only attach to newly created contacts.
             if ($target && !empty($validated['label_ids'])) {
                 if (!$onlyNew || $isNew) {
-                    $target->labels()->syncWithoutDetaching($validated['label_ids']);
+                    $alreadyHad = $target->labels()->pluck('labels.id')->toArray();
+                    $newlyAttached = array_values(array_diff($validated['label_ids'], $alreadyHad));
+                    if (!empty($newlyAttached)) {
+                        $target->labels()->syncWithoutDetaching($newlyAttached);
+                        $labelsAttached[$target->id] = $newlyAttached;
+                    }
                 }
             }
+        }
+
+        // Log operation for undo (only if something actually happened)
+        if (!empty($createdIds) || !empty($updatedSnapshots) || !empty($labelsAttached)) {
+            $parts = [];
+            if ($created) $parts[] = "{$created} nuevos";
+            if ($updated) $parts[] = "{$updated} actualizados";
+            BulkOperation::create([
+                'user_id' => $request->user()?->id,
+                'type' => 'quick_add',
+                'description' => 'Agregar telefonos: ' . (implode(', ', $parts) ?: 'sin cambios'),
+                'payload' => [
+                    'created_ids' => $createdIds,
+                    'updated_snapshots' => $updatedSnapshots,
+                    'labels_attached' => $labelsAttached,
+                ],
+            ]);
         }
 
         return response()->json([
@@ -325,5 +405,99 @@ class ContactController extends Controller
             $request->input('status_id') ? (int) $request->input('status_id') : null,
             $request->input('country')
         );
+    }
+
+    /**
+     * List recent bulk operations that can still be undone.
+     */
+    public function recentOperations(Request $request): JsonResponse
+    {
+        $ops = BulkOperation::where('user_id', $request->user()?->id)
+            ->whereNull('undone_at')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get(['id', 'type', 'description', 'created_at']);
+
+        return response()->json($ops);
+    }
+
+    /**
+     * Undo a specific bulk operation by ID.
+     */
+    public function undoOperation(BulkOperation $operation, Request $request): JsonResponse
+    {
+        if ($operation->user_id !== $request->user()?->id) {
+            return response()->json(['error' => 'Not allowed'], 403);
+        }
+        if ($operation->undone_at) {
+            return response()->json(['error' => 'Already undone'], 422);
+        }
+
+        DB::transaction(function () use ($operation) {
+            $payload = $operation->payload;
+
+            switch ($operation->type) {
+                case 'bulk_status':
+                    foreach ($payload['previous'] as $id => $prevStatusId) {
+                        Contact::where('id', $id)->update(['status_id' => $prevStatusId]);
+                    }
+                    break;
+
+                case 'bulk_date':
+                    foreach ($payload['previous'] as $id => $prevDate) {
+                        Contact::where('id', $id)->update(['date' => $prevDate]);
+                    }
+                    break;
+
+                case 'bulk_labels':
+                    $action = $payload['action'];
+                    $labelIds = $payload['label_ids'];
+                    $existingBefore = $payload['existing_before'] ?? [];
+                    foreach ($existingBefore as $contactId => $beforeLabelIds) {
+                        $contact = Contact::find($contactId);
+                        if (!$contact) continue;
+                        if ($action === 'attach') {
+                            // Detach only the labels that weren't there before
+                            $toRemove = array_diff($labelIds, $beforeLabelIds);
+                            if (!empty($toRemove)) $contact->labels()->detach($toRemove);
+                        } else {
+                            // Re-attach ONLY the labels that were detached (i.e. were there before AND are in label_ids)
+                            $toReattach = array_intersect($labelIds, $beforeLabelIds);
+                            if (!empty($toReattach)) $contact->labels()->syncWithoutDetaching($toReattach);
+                        }
+                    }
+                    break;
+
+                case 'quick_add':
+                    // Restore updated contacts' previous field values
+                    foreach ($payload['updated_snapshots'] ?? [] as $contactId => $snapshot) {
+                        $contact = Contact::find($contactId);
+                        if (!$contact) continue;
+                        foreach ($snapshot as $field => $value) {
+                            $contact->{$field} = $value;
+                        }
+                        $contact->save();
+                    }
+                    // Detach labels we attached
+                    foreach ($payload['labels_attached'] ?? [] as $contactId => $labelIds) {
+                        $contact = Contact::find($contactId);
+                        if ($contact && !empty($labelIds)) {
+                            $contact->labels()->detach($labelIds);
+                        }
+                    }
+                    // Delete newly created contacts (and cascade their label pivots)
+                    $createdIds = $payload['created_ids'] ?? [];
+                    if (!empty($createdIds)) {
+                        DB::table('contact_label')->whereIn('contact_id', $createdIds)->delete();
+                        Contact::whereIn('id', $createdIds)->delete();
+                    }
+                    break;
+            }
+
+            $operation->undone_at = now();
+            $operation->save();
+        });
+
+        return response()->json(['undone' => true, 'description' => $operation->description]);
     }
 }

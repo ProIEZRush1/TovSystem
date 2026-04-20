@@ -63,6 +63,10 @@
         "quickAddUpdated": "{count} actualizados",
         "quickAddSkipped": "{count} ya existian",
         "sourcePlaceholder": "Ej. Formulario web, Evento, Referido...",
+        "undo": "Deshacer",
+        "undoAction": "Deshacer",
+        "recentOperations": "Acciones recientes",
+        "confirmUndo": "Deshacer esta accion?\n\n{description}\n\nSe revertiran todos los cambios que hizo.",
         "onlyNew": "Solo aplicar a contactos nuevos",
         "onlyNewHint": "Si activado, los telefonos que ya existen se dejan sin cambios (conservan su estado, etiquetas y fecha actuales). Solo se aplican los datos a los que realmente son nuevos."
     },
