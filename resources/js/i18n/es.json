@@ -63,6 +63,8 @@
         "quickAddUpdated": "{count} actualizados",
         "quickAddSkipped": "{count} ya existian",
         "sourcePlaceholder": "Ej. Formulario web, Evento, Referido...",
+        "deleteSelected": "Eliminar seleccionados",
+        "confirmBulkDelete": "Seguro que quieres eliminar {count} contactos? Puedes deshacer esta accion despues.",
         "undo": "Deshacer",
         "undoAction": "Deshacer",
         "recentOperations": "Acciones recientes",

@@ -176,6 +176,47 @@ class ContactController extends Controller
         return back()->with('success', count($validated['ids']) . ' contacts updated.');
     }
 
+    public function bulkDelete(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'integer|exists:contacts,id',
+        ]);
+
+        $contacts = Contact::whereIn('id', $validated['ids'])->get();
+
+        // Snapshot full data + labels for undo
+        $snapshots = $contacts->map(function ($c) {
+            return [
+                'id' => $c->id,
+                'phone' => $c->phone,
+                'name' => $c->name,
+                'country' => $c->country,
+                'status_id' => $c->status_id,
+                'source' => $c->source,
+                'date' => $c->date?->format('Y-m-d'),
+                'notes' => $c->notes,
+                'created_at' => $c->created_at?->toDateTimeString(),
+                'updated_at' => $c->updated_at?->toDateTimeString(),
+                'label_ids' => $c->labels()->pluck('labels.id')->toArray(),
+            ];
+        })->toArray();
+
+        DB::transaction(function () use ($validated) {
+            DB::table('contact_label')->whereIn('contact_id', $validated['ids'])->delete();
+            Contact::whereIn('id', $validated['ids'])->delete();
+        });
+
+        BulkOperation::create([
+            'user_id' => $request->user()?->id,
+            'type' => 'bulk_delete',
+            'description' => count($validated['ids']) . ' contactos eliminados',
+            'payload' => ['snapshots' => $snapshots],
+        ]);
+
+        return back()->with('success', count($validated['ids']) . ' contactos eliminados.');
+    }
+
     public function bulkLabels(Request $request): RedirectResponse
     {
         $validated = $request->validate([
@@ -464,6 +505,34 @@ class ContactController extends Controller
                             // Re-attach ONLY the labels that were detached (i.e. were there before AND are in label_ids)
                             $toReattach = array_intersect($labelIds, $beforeLabelIds);
                             if (!empty($toReattach)) $contact->labels()->syncWithoutDetaching($toReattach);
+                        }
+                    }
+                    break;
+
+                case 'bulk_delete':
+                    foreach ($payload['snapshots'] ?? [] as $snap) {
+                        // Skip if phone already taken by someone else (maybe re-added in the meantime)
+                        if (Contact::where('phone', $snap['phone'])->exists()) {
+                            continue;
+                        }
+                        // Re-insert with the original id so FK-heavy history still points here
+                        DB::table('contacts')->insert([
+                            'id' => $snap['id'],
+                            'phone' => $snap['phone'],
+                            'name' => $snap['name'],
+                            'country' => $snap['country'],
+                            'status_id' => $snap['status_id'],
+                            'source' => $snap['source'],
+                            'date' => $snap['date'],
+                            'notes' => $snap['notes'],
+                            'created_at' => $snap['created_at'],
+                            'updated_at' => $snap['updated_at'],
+                        ]);
+                        if (!empty($snap['label_ids'])) {
+                            $rows = collect($snap['label_ids'])
+                                ->map(fn ($id) => ['contact_id' => $snap['id'], 'label_id' => $id])
+                                ->toArray();
+                            DB::table('contact_label')->insertOrIgnore($rows);
                         }
                     }
                     break;
