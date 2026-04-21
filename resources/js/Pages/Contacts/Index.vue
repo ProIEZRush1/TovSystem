@@ -6,6 +6,7 @@ import { usePermissions } from '@/composables/usePermissions';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import SearchInput from '@/Components/SearchInput.vue';
 import FilterDropdown from '@/Components/FilterDropdown.vue';
+import MultiSelectDropdown from '@/Components/MultiSelectDropdown.vue';
 import StatusBadge from '@/Components/StatusBadge.vue';
 import ConfirmModal from '@/Components/ConfirmModal.vue';
 import axios from 'axios';
@@ -23,8 +24,15 @@ const props = defineProps({
 
 const filters = Array.isArray(props.filters) ? {} : (props.filters || {});
 const search = ref(filters.search || '');
-const statusFilter = ref(filters.status_id || '');
-const countryFilter = ref(filters.country || '');
+// Status/Country filters are now multi-select arrays.
+// Accept both legacy "5" and new "5,7,9" URL params on load.
+function parseFilterList(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    return String(raw).split(',').map(s => s.trim()).filter(Boolean);
+}
+const statusFilter = ref(parseFilterList(filters.status_id).map(v => parseInt(v) || v));
+const countryFilter = ref(parseFilterList(filters.country));
 const labelFilter = ref(filters.label_id || '');
 const sortField = ref(typeof filters.sort === 'string' ? filters.sort : '');
 const sortDir = ref(typeof filters.direction === 'string' ? filters.direction : 'asc');
@@ -177,11 +185,15 @@ const countryOptions = computed(() =>
     props.countries.map(c => ({ value: c, label: c }))
 );
 
+function joinArr(a) {
+    return (Array.isArray(a) && a.length) ? a.join(',') : undefined;
+}
+
 function applyFilters() {
     router.get(route('contacts.index'), {
         search: search.value || undefined,
-        status_id: statusFilter.value || undefined,
-        country: countryFilter.value || undefined,
+        status_id: joinArr(statusFilter.value),
+        country: joinArr(countryFilter.value),
         label_id: labelFilter.value || undefined,
         date_from: dateFrom.value || undefined,
         date_to: dateTo.value || undefined,
@@ -211,8 +223,10 @@ function buildPageUrl(page) {
     const params = new URLSearchParams();
     params.set('page', page);
     if (search.value) params.set('search', search.value);
-    if (statusFilter.value) params.set('status_id', statusFilter.value);
-    if (countryFilter.value) params.set('country', countryFilter.value);
+    const _sid = joinArr(statusFilter.value);
+    if (_sid) params.set('status_id', _sid);
+    const _cnt = joinArr(countryFilter.value);
+    if (_cnt) params.set('country', _cnt);
     if (labelFilter.value) params.set('label_id', labelFilter.value);
     if (dateFrom.value) params.set('date_from', dateFrom.value);
     if (dateTo.value) params.set('date_to', dateTo.value);
@@ -382,8 +396,10 @@ function deleteContact() {
 function exportCsv() {
     const params = new URLSearchParams();
     if (search.value) params.set('search', search.value);
-    if (statusFilter.value) params.set('status_id', statusFilter.value);
-    if (countryFilter.value) params.set('country', countryFilter.value);
+    const sid = joinArr(statusFilter.value);
+    if (sid) params.set('status_id', sid);
+    const cnt = joinArr(countryFilter.value);
+    if (cnt) params.set('country', cnt);
     window.location.href = route('contacts.export') + '?' + params.toString();
 }
 
@@ -516,8 +532,8 @@ onUnmounted(() => { if (opsInterval) clearInterval(opsInterval); });
                     <div class="w-full sm:w-64">
                         <SearchInput v-model="search" :placeholder="t('contacts.search')" />
                     </div>
-                    <FilterDropdown v-model="statusFilter" :options="statusOptions" :placeholder="t('contacts.allStatuses')" />
-                    <FilterDropdown v-model="countryFilter" :options="countryOptions" :placeholder="t('contacts.allCountries')" />
+                    <MultiSelectDropdown v-model="statusFilter" :options="statusOptions" :placeholder="t('contacts.allStatuses')" />
+                    <MultiSelectDropdown v-model="countryFilter" :options="countryOptions" :placeholder="t('contacts.allCountries')" />
                     <FilterDropdown v-model="labelFilter" :options="labelOptions" :placeholder="t('labels.allLabels')" />
                     <div class="flex items-center gap-1.5">
                         <input type="date" v-model="dateFrom" class="rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500 w-36" :title="t('contacts.dateFrom')" />

@@ -8,7 +8,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ContactExportService
 {
-    public function export(?string $search = null, ?int $statusId = null, ?string $country = null): StreamedResponse
+    public function export(?string $search = null, int|array|null $statusId = null, string|array|null $country = null): StreamedResponse
     {
         return new StreamedResponse(function () use ($search, $statusId, $country) {
             $handle = fopen('php://output', 'w');

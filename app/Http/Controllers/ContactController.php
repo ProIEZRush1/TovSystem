@@ -23,8 +23,8 @@ class ContactController extends Controller
         $contacts = Contact::query()
             ->with(['status', 'labels'])
             ->search($request->input('search'))
-            ->filterByStatus($request->input('status_id') ? (int) $request->input('status_id') : null)
-            ->filterByCountry($request->input('country'))
+            ->filterByStatus($this->parseMultiInt($request->input('status_id')))
+            ->filterByCountry($this->parseMultiString($request->input('country')))
             ->filterByLabel($request->input('label_id') ? (int) $request->input('label_id') : null)
             ->filterByDate($request->input('date_from'), $request->input('date_to'))
             ->when($request->input('sort'), function ($query) use ($request) {
@@ -59,8 +59,8 @@ class ContactController extends Controller
         $contacts = Contact::query()
             ->with(['status', 'labels'])
             ->search($request->input('search'))
-            ->filterByStatus($request->input('status_id') ? (int) $request->input('status_id') : null)
-            ->filterByCountry($request->input('country'))
+            ->filterByStatus($this->parseMultiInt($request->input('status_id')))
+            ->filterByCountry($this->parseMultiString($request->input('country')))
             ->filterByLabel($request->input('label_id') ? (int) $request->input('label_id') : null)
             ->filterByDate($request->input('date_from'), $request->input('date_to'))
             ->when($request->input('sort'), function ($query) use ($request) {
@@ -261,6 +261,42 @@ class ContactController extends Controller
     }
 
     /**
+     * Parse a filter input that may be:
+     *   - null / empty
+     *   - single value "5"
+     *   - comma-separated "5,7,9"
+     *   - array [5, 7]
+     * Returns null, int, or int[] ready for the scope.
+     */
+    private function parseMultiInt($input): int|array|null
+    {
+        if (is_null($input) || $input === '' || $input === []) return null;
+        if (is_array($input)) {
+            $out = array_values(array_filter(array_map('intval', $input)));
+            return empty($out) ? null : (count($out) === 1 ? $out[0] : $out);
+        }
+        if (is_string($input) && str_contains($input, ',')) {
+            $out = array_values(array_filter(array_map('intval', explode(',', $input))));
+            return empty($out) ? null : (count($out) === 1 ? $out[0] : $out);
+        }
+        return (int) $input;
+    }
+
+    private function parseMultiString($input): string|array|null
+    {
+        if (is_null($input) || $input === '' || $input === []) return null;
+        if (is_array($input)) {
+            $out = array_values(array_filter(array_map('trim', $input)));
+            return empty($out) ? null : (count($out) === 1 ? $out[0] : $out);
+        }
+        if (is_string($input) && str_contains($input, ',')) {
+            $out = array_values(array_filter(array_map('trim', explode(',', $input))));
+            return empty($out) ? null : (count($out) === 1 ? $out[0] : $out);
+        }
+        return (string) $input;
+    }
+
+    /**
      * Parse a free-form "phones pasted by user" line into [phone, name].
      * Supports comma-separated and whitespace-separated, in either order.
      * Returns [null, null] if no valid phone is found.
@@ -443,8 +479,8 @@ class ContactController extends Controller
     {
         return $exportService->export(
             $request->input('search'),
-            $request->input('status_id') ? (int) $request->input('status_id') : null,
-            $request->input('country')
+            $this->parseMultiInt($request->input('status_id')),
+            $this->parseMultiString($request->input('country'))
         );
     }
 

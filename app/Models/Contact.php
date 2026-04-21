@@ -57,19 +57,33 @@ class Contact extends Model
         });
     }
 
-    public function scopeFilterByStatus(Builder $query, ?int $statusId): Builder
+    /**
+     * Accepts int (single status) or array of ints (multi).
+     */
+    public function scopeFilterByStatus(Builder $query, int|array|null $statusId): Builder
     {
-        if (is_null($statusId)) {
+        if (is_null($statusId) || (is_array($statusId) && empty($statusId))) {
             return $query;
+        }
+
+        if (is_array($statusId)) {
+            return $query->whereIn('status_id', $statusId);
         }
 
         return $query->where('status_id', $statusId);
     }
 
-    public function scopeFilterByCountry(Builder $query, ?string $country): Builder
+    /**
+     * Accepts string (single country) or array of strings (multi).
+     */
+    public function scopeFilterByCountry(Builder $query, string|array|null $country): Builder
     {
         if (empty($country)) {
             return $query;
+        }
+
+        if (is_array($country)) {
+            return $query->whereIn('country', $country);
         }
 
         return $query->where('country', $country);
