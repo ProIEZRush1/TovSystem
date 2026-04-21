@@ -25,7 +25,7 @@ class ContactController extends Controller
             ->search($request->input('search'))
             ->filterByStatus($this->parseMultiInt($request->input('status_id')))
             ->filterByCountry($this->parseMultiString($request->input('country')))
-            ->filterByLabel($request->input('label_id') ? (int) $request->input('label_id') : null)
+            ->filterByLabel($this->parseMultiInt($request->input('label_id')))
             ->filterByDate($request->input('date_from'), $request->input('date_to'))
             ->when($request->input('sort'), function ($query) use ($request) {
                 $direction = $request->input('direction', 'asc');
@@ -61,7 +61,7 @@ class ContactController extends Controller
             ->search($request->input('search'))
             ->filterByStatus($this->parseMultiInt($request->input('status_id')))
             ->filterByCountry($this->parseMultiString($request->input('country')))
-            ->filterByLabel($request->input('label_id') ? (int) $request->input('label_id') : null)
+            ->filterByLabel($this->parseMultiInt($request->input('label_id')))
             ->filterByDate($request->input('date_from'), $request->input('date_to'))
             ->when($request->input('sort'), function ($query) use ($request) {
                 $direction = $request->input('direction', 'asc');

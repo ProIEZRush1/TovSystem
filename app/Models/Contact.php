@@ -36,10 +36,17 @@ class Contact extends Model
         return $this->belongsToMany(Label::class);
     }
 
-    public function scopeFilterByLabel(Builder $query, ?int $labelId): Builder
+    /**
+     * Accepts int (single label) or array of ints (multi - OR match).
+     */
+    public function scopeFilterByLabel(Builder $query, int|array|null $labelId): Builder
     {
-        if (is_null($labelId)) {
+        if (is_null($labelId) || (is_array($labelId) && empty($labelId))) {
             return $query;
+        }
+
+        if (is_array($labelId)) {
+            return $query->whereHas('labels', fn (Builder $q) => $q->whereIn('labels.id', $labelId));
         }
 
         return $query->whereHas('labels', fn (Builder $q) => $q->where('labels.id', $labelId));

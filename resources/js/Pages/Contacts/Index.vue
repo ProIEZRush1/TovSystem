@@ -33,7 +33,7 @@ function parseFilterList(raw) {
 }
 const statusFilter = ref(parseFilterList(filters.status_id).map(v => parseInt(v) || v));
 const countryFilter = ref(parseFilterList(filters.country));
-const labelFilter = ref(filters.label_id || '');
+const labelFilter = ref(parseFilterList(filters.label_id).map(v => parseInt(v) || v));
 const sortField = ref(typeof filters.sort === 'string' ? filters.sort : '');
 const sortDir = ref(typeof filters.direction === 'string' ? filters.direction : 'asc');
 const selectedIds = ref([]);
@@ -189,12 +189,21 @@ function joinArr(a) {
     return (Array.isArray(a) && a.length) ? a.join(',') : undefined;
 }
 
+function formatContactDate(d) {
+    if (!d) return '-';
+    // Laravel returns ISO like "2026-04-15T00:00:00.000000Z" or "2026-04-15"
+    const s = String(d).slice(0, 10);
+    const parts = s.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return s;
+}
+
 function applyFilters() {
     router.get(route('contacts.index'), {
         search: search.value || undefined,
         status_id: joinArr(statusFilter.value),
         country: joinArr(countryFilter.value),
-        label_id: labelFilter.value || undefined,
+        label_id: joinArr(labelFilter.value),
         date_from: dateFrom.value || undefined,
         date_to: dateTo.value || undefined,
         sort: sortField.value || undefined,
@@ -227,7 +236,8 @@ function buildPageUrl(page) {
     if (_sid) params.set('status_id', _sid);
     const _cnt = joinArr(countryFilter.value);
     if (_cnt) params.set('country', _cnt);
-    if (labelFilter.value) params.set('label_id', labelFilter.value);
+    const _lid = joinArr(labelFilter.value);
+    if (_lid) params.set('label_id', _lid);
     if (dateFrom.value) params.set('date_from', dateFrom.value);
     if (dateTo.value) params.set('date_to', dateTo.value);
     if (sortField.value) params.set('sort', sortField.value);
@@ -534,7 +544,7 @@ onUnmounted(() => { if (opsInterval) clearInterval(opsInterval); });
                     </div>
                     <MultiSelectDropdown v-model="statusFilter" :options="statusOptions" :placeholder="t('contacts.allStatuses')" />
                     <MultiSelectDropdown v-model="countryFilter" :options="countryOptions" :placeholder="t('contacts.allCountries')" />
-                    <FilterDropdown v-model="labelFilter" :options="labelOptions" :placeholder="t('labels.allLabels')" />
+                    <MultiSelectDropdown v-model="labelFilter" :options="labelOptions" :placeholder="t('labels.allLabels')" />
                     <div class="flex items-center gap-1.5">
                         <input type="date" v-model="dateFrom" class="rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500 w-36" :title="t('contacts.dateFrom')" />
                         <span class="text-slate-400 text-xs">-</span>
@@ -645,6 +655,9 @@ onUnmounted(() => { if (opsInterval) clearInterval(opsInterval); });
                             <th @click="toggleSort('country')" class="cursor-pointer px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider hover:text-slate-700 transition">
                                 {{ t('contacts.country') }}{{ sortIcon('country') }}
                             </th>
+                            <th @click="toggleSort('date')" class="cursor-pointer px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider hover:text-slate-700 transition">
+                                {{ t('contacts.date') }}{{ sortIcon('date') }}
+                            </th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{{ t('contacts.status') }}</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{{ t('labels.title') }}</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{{ t('contacts.source') }}</th>
@@ -665,6 +678,7 @@ onUnmounted(() => { if (opsInterval) clearInterval(opsInterval); });
                             <td class="px-4 py-3 text-sm font-medium text-slate-900 whitespace-nowrap font-mono">{{ contact.phone }}</td>
                             <td class="px-4 py-3 text-sm text-slate-700">{{ contact.name || '-' }}</td>
                             <td class="px-4 py-3 text-sm text-slate-600">{{ contact.country || '-' }}</td>
+                            <td class="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{{ formatContactDate(contact.date) }}</td>
                             <td class="px-4 py-3">
                                 <StatusBadge v-if="contact.status" :name="contact.status.name" :color="contact.status.color" />
                                 <span v-else class="text-sm text-slate-300">-</span>
