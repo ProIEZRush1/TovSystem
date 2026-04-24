@@ -763,8 +763,8 @@ onUnmounted(() => { if (opsInterval) clearInterval(opsInterval); });
                 leave-to-class="opacity-0"
             >
                 <div v-if="showQuickAdd" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" @click.self="showQuickAdd = false">
-                    <div class="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden">
-                        <div class="border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+                    <div class="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div class="shrink-0 border-b border-slate-100 px-6 py-4 flex items-center justify-between">
                             <h3 class="text-lg font-bold text-slate-900">{{ t('contacts.quickAdd') }}</h3>
                             <button @click="showQuickAdd = false" class="text-slate-400 hover:text-slate-600 transition">
                                 <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -772,7 +772,7 @@ onUnmounted(() => { if (opsInterval) clearInterval(opsInterval); });
                                 </svg>
                             </button>
                         </div>
-                        <div class="px-6 py-4 space-y-4">
+                        <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('contacts.quickAddPhones') }}</label>
                                 <textarea
@@ -863,7 +863,7 @@ onUnmounted(() => { if (opsInterval) clearInterval(opsInterval); });
                                 </p>
                             </div>
                         </div>
-                        <div class="border-t border-slate-100 px-6 py-4 flex justify-end gap-3">
+                        <div class="shrink-0 border-t border-slate-100 px-6 py-4 flex justify-end gap-3 bg-white">
                             <button @click="showQuickAdd = false" class="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
                                 {{ t('common.close') }}
                             </button>
