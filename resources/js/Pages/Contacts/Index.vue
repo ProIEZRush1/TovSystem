@@ -51,7 +51,7 @@ const quickAddStatusId = ref('');
 const quickAddDate = ref('');
 const quickAddLabelIds = ref([]);
 const quickAddSource = ref('');
-const quickAddOnlyNew = ref(true);
+const quickAddMode = ref('only_new'); // only_new | fill_empty | overwrite
 const quickAddLoading = ref(false);
 const quickAddResult = ref(null);
 
@@ -424,7 +424,7 @@ async function submitQuickAdd() {
             date: quickAddDate.value || null,
             label_ids: quickAddLabelIds.value,
             source: quickAddSource.value || null,
-            only_new: quickAddOnlyNew.value,
+            mode: quickAddMode.value,
         });
         quickAddResult.value = response.data;
         quickAddPhones.value = '';
@@ -825,14 +825,33 @@ onUnmounted(() => { if (opsInterval) clearInterval(opsInterval); });
                                 <input type="text" v-model="quickAddSource" maxlength="100" class="block w-full rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500" :placeholder="t('contacts.sourcePlaceholder')" />
                             </div>
 
-                            <!-- Only new toggle -->
-                            <label class="flex items-start gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 cursor-pointer">
-                                <input type="checkbox" v-model="quickAddOnlyNew" class="h-5 w-5 mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
-                                <div>
-                                    <p class="text-sm font-medium text-slate-900">{{ t('contacts.onlyNew') }}</p>
-                                    <p class="text-xs text-slate-600 mt-0.5">{{ t('contacts.onlyNewHint') }}</p>
+                            <!-- Mode selector -->
+                            <div class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+                                <p class="text-sm font-medium text-slate-900 mb-2">{{ t('contacts.modeTitle') }}</p>
+                                <div class="space-y-2">
+                                    <label class="flex items-start gap-3 cursor-pointer">
+                                        <input type="radio" v-model="quickAddMode" value="only_new" class="mt-1 h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                        <div>
+                                            <p class="text-sm font-medium text-slate-800">{{ t('contacts.modeOnlyNew') }}</p>
+                                            <p class="text-xs text-slate-600">{{ t('contacts.modeOnlyNewHint') }}</p>
+                                        </div>
+                                    </label>
+                                    <label class="flex items-start gap-3 cursor-pointer">
+                                        <input type="radio" v-model="quickAddMode" value="fill_empty" class="mt-1 h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                        <div>
+                                            <p class="text-sm font-medium text-slate-800">{{ t('contacts.modeFillEmpty') }}</p>
+                                            <p class="text-xs text-slate-600">{{ t('contacts.modeFillEmptyHint') }}</p>
+                                        </div>
+                                    </label>
+                                    <label class="flex items-start gap-3 cursor-pointer">
+                                        <input type="radio" v-model="quickAddMode" value="overwrite" class="mt-1 h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                        <div>
+                                            <p class="text-sm font-medium text-slate-800">{{ t('contacts.modeOverwrite') }}</p>
+                                            <p class="text-xs text-slate-600">{{ t('contacts.modeOverwriteHint') }}</p>
+                                        </div>
+                                    </label>
                                 </div>
-                            </label>
+                            </div>
 
                             <!-- Result feedback -->
                             <div v-if="quickAddResult" class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm">

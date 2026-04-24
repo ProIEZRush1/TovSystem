@@ -70,7 +70,14 @@
         "recentOperations": "Recent operations",
         "confirmUndo": "Undo this action?\n\n{description}\n\nAll changes it made will be reverted.",
         "onlyNew": "Only apply to new contacts",
-        "onlyNewHint": "When checked, existing phones are left untouched (they keep their current status, labels and date). Data only applies to truly new contacts."
+        "onlyNewHint": "When checked, existing phones are left untouched (they keep their current status, labels and date). Data only applies to truly new contacts.",
+        "modeTitle": "How to apply to contacts",
+        "modeOnlyNew": "Only to new ones",
+        "modeOnlyNewHint": "Existing phones are left untouched — they keep their current status, labels, date and name.",
+        "modeFillEmpty": "Fill empty fields",
+        "modeFillEmptyHint": "On existing phones, only set status/date/source if they were empty. If they already had a status, keep it.",
+        "modeOverwrite": "Overwrite everything",
+        "modeOverwriteHint": "On existing phones, replace status/date/source with the new values (even if they already had others). Use this to move contacts to a new status (e.g. those who replied)."
     },
     "labels": {
         "title": "Labels",

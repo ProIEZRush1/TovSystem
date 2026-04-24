@@ -339,10 +339,13 @@ class ContactController extends Controller
             'label_ids' => 'nullable|array',
             'label_ids.*' => 'integer|exists:labels,id',
             'source' => 'nullable|string|max:100',
+            // mode: only_new | fill_empty | overwrite
+            'mode' => 'nullable|in:only_new,fill_empty,overwrite',
+            // legacy boolean still accepted
             'only_new' => 'nullable|boolean',
         ]);
 
-        $onlyNew = !empty($validated['only_new']);
+        $mode = $validated['mode'] ?? (!empty($validated['only_new']) ? 'only_new' : 'fill_empty');
         $lines = array_filter(array_map('trim', explode("\n", $validated['phones'])));
         $created = 0;
         $updated = 0;
@@ -386,34 +389,50 @@ class ContactController extends Controller
             $target = null;
 
             if ($existing) {
-                if ($onlyNew) {
+                if ($mode === 'only_new') {
                     // Leave existing contact completely untouched
                     $skipped++;
                     continue;
                 }
-                // Snapshot for undo (only fields we might change)
+
+                // In fill_empty we only write fields that are currently empty.
+                // In overwrite we always write provided fields, replacing existing values.
+                $overwrite = $mode === 'overwrite';
+
                 $snapshot = [];
                 $changed = false;
-                if (!empty($name) && empty($existing->name)) {
+
+                $shouldSetName = !empty($name) && ($overwrite || empty($existing->name));
+                if ($shouldSetName && $existing->name !== $name) {
                     $snapshot['name'] = $existing->name;
                     $existing->name = $name;
                     $changed = true;
                 }
-                if (!is_null($validated['status_id']) && is_null($existing->status_id)) {
+
+                $shouldSetStatus = !is_null($validated['status_id']) && ($overwrite || is_null($existing->status_id));
+                if ($shouldSetStatus && $existing->status_id != $validated['status_id']) {
                     $snapshot['status_id'] = $existing->status_id;
                     $existing->status_id = $validated['status_id'];
                     $changed = true;
                 }
-                if (!empty($validated['date']) && is_null($existing->date)) {
-                    $snapshot['date'] = $existing->date?->format('Y-m-d');
-                    $existing->date = $validated['date'];
-                    $changed = true;
+
+                $shouldSetDate = !empty($validated['date']) && ($overwrite || is_null($existing->date));
+                if ($shouldSetDate) {
+                    $prevDate = $existing->date?->format('Y-m-d');
+                    if ($prevDate !== $validated['date']) {
+                        $snapshot['date'] = $prevDate;
+                        $existing->date = $validated['date'];
+                        $changed = true;
+                    }
                 }
-                if (!empty($validated['source']) && empty($existing->source)) {
+
+                $shouldSetSource = !empty($validated['source']) && ($overwrite || empty($existing->source));
+                if ($shouldSetSource && $existing->source !== $validated['source']) {
                     $snapshot['source'] = $existing->source;
                     $existing->source = $validated['source'];
                     $changed = true;
                 }
+
                 if ($changed) {
                     $existing->save();
                     $updated++;
@@ -437,9 +456,10 @@ class ContactController extends Controller
                 $createdIds[] = $target->id;
             }
 
-            // Attach labels. If only_new is true, only attach to newly created contacts.
+            // Attach labels. In only_new mode, only attach to newly created contacts.
+            // In fill_empty / overwrite, attach to every processed contact.
             if ($target && !empty($validated['label_ids'])) {
-                if (!$onlyNew || $isNew) {
+                if ($mode !== 'only_new' || $isNew) {
                     $alreadyHad = $target->labels()->pluck('labels.id')->toArray();
                     $newlyAttached = array_values(array_diff($validated['label_ids'], $alreadyHad));
                     if (!empty($newlyAttached)) {

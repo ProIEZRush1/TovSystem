@@ -70,7 +70,14 @@
         "recentOperations": "Acciones recientes",
         "confirmUndo": "Deshacer esta accion?\n\n{description}\n\nSe revertiran todos los cambios que hizo.",
         "onlyNew": "Solo aplicar a contactos nuevos",
-        "onlyNewHint": "Si activado, los telefonos que ya existen se dejan sin cambios (conservan su estado, etiquetas y fecha actuales). Solo se aplican los datos a los que realmente son nuevos."
+        "onlyNewHint": "Si activado, los telefonos que ya existen se dejan sin cambios (conservan su estado, etiquetas y fecha actuales). Solo se aplican los datos a los que realmente son nuevos.",
+        "modeTitle": "Como aplicar a los contactos",
+        "modeOnlyNew": "Solo a los nuevos",
+        "modeOnlyNewHint": "A los que ya existen no les toco nada — mantienen su estado, etiquetas, fecha y nombre actuales.",
+        "modeFillEmpty": "Completar vacios",
+        "modeFillEmptyHint": "A los que ya existen les pongo el estado/fecha/fuente SOLO si lo tenian vacio. Si ya tenian un estado, lo respeto.",
+        "modeOverwrite": "Sobrescribir todo",
+        "modeOverwriteHint": "A los que ya existen les cambio el estado/fecha/fuente a los nuevos valores (aunque ya tuvieran otros). Usalo cuando quieras mover contactos a un nuevo estado (ej. los que ya contestaron)."
     },
     "labels": {
         "title": "Etiquetas",
