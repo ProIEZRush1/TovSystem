@@ -124,6 +124,98 @@ class ContactController extends Controller
         return redirect()->route('contacts.index')->with('success', 'Contact deleted.');
     }
 
+    /**
+     * Apply any combination of status / date / labels in one request,
+     * snapshotting previous values for a single undoable operation.
+     */
+    public function bulkApply(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:contacts,id',
+            'status_id' => 'nullable|exists:statuses,id',
+            'date' => 'nullable|date',
+            'label_ids' => 'nullable|array',
+            'label_ids.*' => 'integer|exists:labels,id',
+            'label_action' => 'nullable|in:attach,detach',
+        ]);
+
+        $ids = $validated['ids'];
+        $hasStatus = !is_null($validated['status_id'] ?? null);
+        $hasDate = !is_null($request->input('date'));  // may be empty string for explicit clear
+        $hasLabels = !empty($validated['label_ids'] ?? []);
+
+        if (!$hasStatus && !$hasDate && !$hasLabels) {
+            return back()->with('error', 'Selecciona al menos un campo para aplicar.');
+        }
+
+        // Snapshots for undo.
+        $existing = Contact::whereIn('id', $ids)->get(['id', 'status_id', 'date']);
+        $prevStatus = $existing->pluck('status_id', 'id')->toArray();
+        $prevDate = $existing->mapWithKeys(fn ($c) => [$c->id => $c->date?->format('Y-m-d')])->toArray();
+
+        $existingLabelMap = [];
+        if ($hasLabels) {
+            foreach (Contact::whereIn('id', $ids)->with('labels:id')->get() as $c) {
+                $existingLabelMap[$c->id] = $c->labels->pluck('id')->toArray();
+            }
+        }
+
+        DB::transaction(function () use ($validated, $ids, $hasStatus, $hasDate, $hasLabels) {
+            if ($hasStatus) {
+                Contact::whereIn('id', $ids)->update(['status_id' => $validated['status_id']]);
+            }
+            if ($hasDate) {
+                Contact::whereIn('id', $ids)->update(['date' => $validated['date'] ?? null]);
+            }
+            if ($hasLabels) {
+                $action = $validated['label_action'] ?? 'attach';
+                foreach (Contact::whereIn('id', $ids)->get() as $c) {
+                    if ($action === 'attach') {
+                        $c->labels()->syncWithoutDetaching($validated['label_ids']);
+                    } else {
+                        $c->labels()->detach($validated['label_ids']);
+                    }
+                }
+            }
+        });
+
+        // Build description
+        $parts = [];
+        if ($hasStatus) {
+            $parts[] = 'estado "' . (Status::where('id', $validated['status_id'])->value('name') ?? '?') . '"';
+        }
+        if ($hasDate) {
+            $parts[] = 'fecha "' . ($validated['date'] ?? 'vacia') . '"';
+        }
+        if ($hasLabels) {
+            $names = Label::whereIn('id', $validated['label_ids'])->pluck('name')->implode(', ');
+            $verb = ($validated['label_action'] ?? 'attach') === 'attach' ? 'agregar etiqueta' : 'quitar etiqueta';
+            $parts[] = "{$verb} \"{$names}\"";
+        }
+        $description = count($ids) . ' contactos: ' . implode(' + ', $parts);
+
+        BulkOperation::create([
+            'user_id' => $request->user()?->id,
+            'type' => 'bulk_apply',
+            'description' => $description,
+            'payload' => [
+                'fields' => array_filter([
+                    'status' => $hasStatus,
+                    'date' => $hasDate,
+                    'labels' => $hasLabels,
+                ]),
+                'prev_status' => $hasStatus ? $prevStatus : null,
+                'prev_date' => $hasDate ? $prevDate : null,
+                'label_action' => $hasLabels ? ($validated['label_action'] ?? 'attach') : null,
+                'label_ids' => $hasLabels ? $validated['label_ids'] : null,
+                'existing_label_map' => $hasLabels ? $existingLabelMap : null,
+            ],
+        ]);
+
+        return back()->with('success', count($ids) . ' contactos actualizados.');
+    }
+
     public function bulkStatus(Request $request): RedirectResponse
     {
         $validated = $request->validate([
@@ -561,6 +653,34 @@ class ContactController extends Controller
                             // Re-attach ONLY the labels that were detached (i.e. were there before AND are in label_ids)
                             $toReattach = array_intersect($labelIds, $beforeLabelIds);
                             if (!empty($toReattach)) $contact->labels()->syncWithoutDetaching($toReattach);
+                        }
+                    }
+                    break;
+
+                case 'bulk_apply':
+                    if (!empty($payload['prev_status'])) {
+                        foreach ($payload['prev_status'] as $id => $prev) {
+                            Contact::where('id', $id)->update(['status_id' => $prev]);
+                        }
+                    }
+                    if (!empty($payload['prev_date'])) {
+                        foreach ($payload['prev_date'] as $id => $prev) {
+                            Contact::where('id', $id)->update(['date' => $prev]);
+                        }
+                    }
+                    if (!empty($payload['label_action']) && !empty($payload['label_ids']) && !empty($payload['existing_label_map'])) {
+                        $action = $payload['label_action'];
+                        $labelIds = $payload['label_ids'];
+                        foreach ($payload['existing_label_map'] as $contactId => $beforeLabelIds) {
+                            $contact = Contact::find($contactId);
+                            if (!$contact) continue;
+                            if ($action === 'attach') {
+                                $toRemove = array_diff($labelIds, $beforeLabelIds);
+                                if (!empty($toRemove)) $contact->labels()->detach($toRemove);
+                            } else {
+                                $toReattach = array_intersect($labelIds, $beforeLabelIds);
+                                if (!empty($toReattach)) $contact->labels()->syncWithoutDetaching($toReattach);
+                            }
                         }
                     }
                     break;

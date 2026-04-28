@@ -352,6 +352,30 @@ function bulkUpdateLabels() {
     });
 }
 
+const bulkApplyHasAnything = computed(() =>
+    !!bulkStatusId.value || !!bulkDateValue.value || !!bulkLabelId.value
+);
+
+function bulkApply() {
+    if (!selectedIds.value.length || !bulkApplyHasAnything.value) return;
+    const payload = { ids: selectedIds.value };
+    if (bulkStatusId.value) payload.status_id = bulkStatusId.value;
+    if (bulkDateValue.value) payload.date = bulkDateValue.value;
+    if (bulkLabelId.value) {
+        payload.label_ids = [parseInt(bulkLabelId.value)];
+        payload.label_action = bulkLabelAction.value;
+    }
+    router.post(route('contacts.bulk-apply'), payload, {
+        onSuccess: () => {
+            selectedIds.value = [];
+            bulkStatusId.value = '';
+            bulkDateValue.value = '';
+            bulkLabelId.value = '';
+            loadRecentOps();
+        },
+    });
+}
+
 const copySuccess = ref(false);
 const copiedCount = ref(0);
 
@@ -594,22 +618,12 @@ onUnmounted(() => { if (opsInterval) clearInterval(opsInterval); });
                             <option value="">{{ t('contacts.bulkStatus') }}</option>
                             <option v-for="s in statuses" :key="s.id" :value="s.id">{{ s.name }}</option>
                         </select>
-                        <button @click="bulkUpdateStatus" :disabled="!bulkStatusId" class="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
-                            {{ t('common.save') }}
-                        </button>
                     </div>
-
-                    <div class="h-5 w-px bg-brand-200"></div>
 
                     <!-- Bulk date -->
                     <div class="flex items-center gap-2">
                         <input type="date" v-model="bulkDateValue" class="rounded-lg border-slate-300 text-sm bg-white focus:border-brand-500 focus:ring-brand-500 w-36" :title="t('contacts.bulkDate')" />
-                        <button @click="bulkUpdateDate" :disabled="!bulkDateValue" class="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-600 disabled:opacity-50 transition">
-                            {{ t('contacts.bulkDate') }}
-                        </button>
                     </div>
-
-                    <div class="h-5 w-px bg-brand-200"></div>
 
                     <!-- Bulk labels -->
                     <div class="flex items-center gap-2">
@@ -621,10 +635,15 @@ onUnmounted(() => { if (opsInterval) clearInterval(opsInterval); });
                             <option value="">{{ t('labels.bulkLabels') }}</option>
                             <option v-for="l in labels" :key="l.id" :value="l.id">{{ l.name }}</option>
                         </select>
-                        <button @click="bulkUpdateLabels" :disabled="!bulkLabelId" class="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-600 disabled:opacity-50 transition">
-                            {{ t('common.save') }}
-                        </button>
                     </div>
+
+                    <!-- Unified Apply button -->
+                    <button @click="bulkApply" :disabled="!bulkApplyHasAnything" class="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
+                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                        </svg>
+                        {{ t('contacts.applyAll') }}
+                    </button>
 
                     <div v-if="can('contacts.delete')" class="h-5 w-px bg-brand-200"></div>
 

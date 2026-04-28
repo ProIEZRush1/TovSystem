@@ -45,6 +45,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/contacts/bulk-delete', [ContactController::class, 'bulkDelete'])
         ->name('contacts.bulk-delete')
         ->middleware('permission:contacts.delete');
+    Route::post('/contacts/bulk-apply', [ContactController::class, 'bulkApply'])
+        ->name('contacts.bulk-apply')
+        ->middleware('permission:contacts.bulk_status');
     Route::post('/contacts/bulk-date', [ContactController::class, 'bulkDate'])
         ->name('contacts.bulk-date')
         ->middleware('permission:contacts.bulk_status');

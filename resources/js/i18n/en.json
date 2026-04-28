@@ -63,6 +63,7 @@
         "quickAddUpdated": "{count} updated",
         "quickAddSkipped": "{count} already existed",
         "sourcePlaceholder": "e.g. Web form, Event, Referral...",
+        "applyAll": "Apply to selected",
         "deleteSelected": "Delete selected",
         "confirmBulkDelete": "Delete {count} contacts? You can undo this action afterwards.",
         "undo": "Undo",
