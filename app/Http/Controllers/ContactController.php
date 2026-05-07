@@ -458,6 +458,13 @@ class ContactController extends Controller
             $parsed[] = ['phone' => $phone, 'name' => $name];
         }
 
+        // Deduplicate: if the same phone appears multiple times, keep the last (has latest name)
+        $unique = [];
+        foreach ($parsed as $entry) {
+            $unique[$entry['phone']] = $entry;
+        }
+        $parsed = array_values($unique);
+
         // Batch-fetch existing contacts in one query instead of N
         $allPhones = array_column($parsed, 'phone');
         $existingMap = Contact::whereIn('phone', $allPhones)
@@ -532,17 +539,23 @@ class ContactController extends Controller
                 $target = $existing;
             } else {
                 $country = PhoneCountryHelper::detectCountry($phone);
-                $target = Contact::create([
-                    'phone' => $phone,
-                    'name' => $name,
-                    'country' => $country,
-                    'status_id' => $validated['status_id'] ?? null,
-                    'date' => $validated['date'] ?? null,
-                    'source' => $validated['source'] ?? null,
-                ]);
-                $created++;
-                $isNew = true;
-                $createdIds[] = $target->id;
+                try {
+                    $target = Contact::create([
+                        'phone' => $phone,
+                        'name' => $name,
+                        'country' => $country,
+                        'status_id' => $validated['status_id'] ?? null,
+                        'date' => $validated['date'] ?? null,
+                        'source' => $validated['source'] ?? null,
+                    ]);
+                    $created++;
+                    $isNew = true;
+                    $createdIds[] = $target->id;
+                } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                    // Phone was added between batch lookup and now — treat as existing
+                    $target = Contact::where('phone', $phone)->first();
+                    $skipped++;
+                }
             }
 
             // Attach labels. In only_new mode, only attach to newly created contacts.
