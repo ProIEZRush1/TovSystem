@@ -130,6 +130,8 @@ class ContactController extends Controller
      */
     public function bulkApply(Request $request): RedirectResponse
     {
+        set_time_limit(300);
+
         $validated = $request->validate([
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:contacts,id',
@@ -424,6 +426,8 @@ class ContactController extends Controller
 
     public function quickAdd(Request $request): JsonResponse
     {
+        set_time_limit(300);
+
         $validated = $request->validate([
             'phones' => 'required|string',
             'status_id' => 'nullable|exists:statuses,id',
@@ -443,40 +447,33 @@ class ContactController extends Controller
         $updated = 0;
         $skipped = 0;
 
+        // Pre-parse all lines to get normalized phones for batch lookup
+        $parsed = [];
+        foreach ($lines as $line) {
+            [$phone, $name] = $this->parsePhoneLine($line);
+            if (!$phone) { $skipped++; continue; }
+            $phone = PhoneCountryHelper::normalize($phone);
+            if (preg_match('/[a-zA-Z]/', $phone)) { $skipped++; continue; }
+            if (strlen($phone) > 30 || strlen(preg_replace('/[^0-9]/', '', $phone)) < 7) { $skipped++; continue; }
+            $parsed[] = ['phone' => $phone, 'name' => $name];
+        }
+
+        // Batch-fetch existing contacts in one query instead of N
+        $allPhones = array_column($parsed, 'phone');
+        $existingMap = Contact::whereIn('phone', $allPhones)
+            ->get()
+            ->keyBy('phone');
+
         // For undo: track new contact IDs + snapshots of updated contacts + labels we attached
         $createdIds = [];
         $updatedSnapshots = []; // id => [field => previous_value]
         $labelsAttached = [];   // contact_id => [label_ids actually newly attached]
 
-        foreach ($lines as $line) {
-            // Parse line. Accepted formats:
-            //   "+5215512345678"                    -> phone only
-            //   "Name, +5215512345678"               -> name , phone
-            //   ", +5215512345678"                   -> , phone
-            //   "+5215512345678, Name"               -> phone , name
-            //   "5215512345678 Margalit Hamui"       -> phone <whitespace> name
-            //   "Margalit Hamui 5215512345678"       -> name <whitespace> phone (last token is digits)
-            [$phone, $name] = $this->parsePhoneLine($line);
-            if (!$phone) {
-                $skipped++;
-                continue;
-            }
+        foreach ($parsed as $entry) {
+            $phone = $entry['phone'];
+            $name = $entry['name'];
 
-            $phone = PhoneCountryHelper::normalize($phone);
-
-            // Sanity: phones shouldn't contain letters. If they do, the parser
-            // failed — skip this row rather than poison the whole batch.
-            if (preg_match('/[a-zA-Z]/', $phone)) {
-                $skipped++;
-                continue;
-            }
-
-            if (strlen($phone) > 30 || strlen(preg_replace('/[^0-9]/', '', $phone)) < 7) {
-                $skipped++;
-                continue;
-            }
-
-            $existing = Contact::where('phone', $phone)->first();
+            $existing = $existingMap->get($phone);
             $isNew = false;
             $target = null;
 
