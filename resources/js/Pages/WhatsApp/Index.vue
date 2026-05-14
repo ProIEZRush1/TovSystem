@@ -19,7 +19,7 @@ const editingId = ref(null);
 const showDeleteModal = ref(false);
 const deleteId = ref(null);
 const refreshingId = ref(null);
-const refreshError = ref('');
+const refreshErrors = ref({}); // { accountId: errorMessage }
 
 const form = useForm({
     name: '',
@@ -75,16 +75,16 @@ function deleteAccount() {
 
 async function refreshAccount(id) {
     refreshingId.value = id;
-    refreshError.value = '';
+    delete refreshErrors.value[id];
     try {
         const r = await axios.post(route('whatsapp.refresh', id));
         if (r.data.error) {
-            refreshError.value = r.data.error;
+            refreshErrors.value[id] = r.data.error;
         } else {
             window.location.reload();
         }
     } catch (e) {
-        refreshError.value = e.response?.data?.message || 'Error al conectar con Meta API';
+        refreshErrors.value[id] = e.response?.data?.message || 'Error al conectar con Meta API';
     } finally {
         refreshingId.value = null;
     }
@@ -183,10 +183,10 @@ async function refreshAccount(id) {
                                 <li>Que el telefono coincida con uno registrado en la WABA</li>
                             </ul>
                         </div>
-                        <!-- Refresh error -->
-                        <div v-if="refreshError" class="mt-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                        <!-- Refresh error (per account) -->
+                        <div v-if="refreshErrors[account.id]" class="mt-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
                             <p class="font-medium">Error de Meta API:</p>
-                            <p class="mt-0.5">{{ refreshError }}</p>
+                            <p class="mt-0.5">{{ refreshErrors[account.id] }}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
