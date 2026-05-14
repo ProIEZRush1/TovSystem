@@ -4,7 +4,9 @@ use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\WhatsAppCampaignController;
 use App\Http\Controllers\WhatsAppController;
+use App\Http\Controllers\WhatsAppInboxController;
 use App\Http\Controllers\WhatsAppWebhookController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\LabelController;
@@ -97,6 +99,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/whatsapp/{account}/messages', [WhatsAppController::class, 'messages'])->name('whatsapp.messages');
         Route::get('/whatsapp/{account}/templates', [WhatsAppController::class, 'templates'])->name('whatsapp.templates');
         Route::get('/whatsapp/{account}/templates-page', [WhatsAppController::class, 'templatesPage'])->name('whatsapp.templates-page');
+
+        // Inbox
+        Route::get('/whatsapp/{account}/inbox', [WhatsAppInboxController::class, 'index'])->name('whatsapp.inbox');
+        Route::get('/whatsapp/{account}/inbox/{conversation}/messages', [WhatsAppInboxController::class, 'messages'])->name('whatsapp.inbox.messages');
+
+        // Campaigns
+        Route::get('/whatsapp/{account}/campaigns', [WhatsAppCampaignController::class, 'index'])->name('whatsapp.campaigns.index');
+        Route::get('/whatsapp/{account}/campaigns/create', [WhatsAppCampaignController::class, 'create'])->name('whatsapp.campaigns.create');
+        Route::get('/whatsapp/{account}/campaigns/{campaign}', [WhatsAppCampaignController::class, 'show'])->name('whatsapp.campaigns.show');
+        Route::get('/whatsapp/{account}/campaigns/{campaign}/status', [WhatsAppCampaignController::class, 'status'])->name('whatsapp.campaigns.status');
     });
     Route::middleware('permission:whatsapp.manage')->group(function () {
         Route::post('/whatsapp', [WhatsAppController::class, 'store'])->name('whatsapp.store');
@@ -108,6 +120,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/whatsapp/{account}/bulk-send', [WhatsAppController::class, 'bulkSend'])->name('whatsapp.bulk-send');
         Route::post('/whatsapp/{account}/templates', [WhatsAppController::class, 'createTemplate'])->name('whatsapp.templates.create');
         Route::delete('/whatsapp/{account}/templates/{name}', [WhatsAppController::class, 'deleteTemplate'])->name('whatsapp.templates.delete');
+
+        // Inbox actions
+        Route::post('/whatsapp/{account}/inbox/new', [WhatsAppInboxController::class, 'newConversation'])->name('whatsapp.inbox.new');
+        Route::post('/whatsapp/{account}/inbox/{conversation}/send', [WhatsAppInboxController::class, 'send'])->name('whatsapp.inbox.send');
+        Route::post('/whatsapp/{account}/inbox/{conversation}/send-template', [WhatsAppInboxController::class, 'sendTemplate'])->name('whatsapp.inbox.send-template');
+        Route::post('/whatsapp/{account}/inbox/{conversation}/archive', [WhatsAppInboxController::class, 'archive'])->name('whatsapp.inbox.archive');
+        Route::post('/whatsapp/{account}/inbox/{conversation}/unarchive', [WhatsAppInboxController::class, 'unarchive'])->name('whatsapp.inbox.unarchive');
+        Route::post('/whatsapp/{account}/inbox/{conversation}/assign', [WhatsAppInboxController::class, 'assign'])->name('whatsapp.inbox.assign');
+
+        // Campaign actions
+        Route::post('/whatsapp/{account}/campaigns', [WhatsAppCampaignController::class, 'store'])->name('whatsapp.campaigns.store');
+        Route::post('/whatsapp/{account}/campaigns/{campaign}/send', [WhatsAppCampaignController::class, 'send'])->name('whatsapp.campaigns.send');
+        Route::post('/whatsapp/{account}/campaigns/{campaign}/cancel', [WhatsAppCampaignController::class, 'cancel'])->name('whatsapp.campaigns.cancel');
+        Route::delete('/whatsapp/{account}/campaigns/{campaign}', [WhatsAppCampaignController::class, 'destroy'])->name('whatsapp.campaigns.destroy');
     });
 
     // Profile (always accessible)

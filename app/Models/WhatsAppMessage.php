@@ -11,11 +11,15 @@ class WhatsAppMessage extends Model
 
     protected $fillable = [
         'whatsapp_account_id',
+        'whatsapp_conversation_id',
         'contact_id',
         'remote_phone',
         'direction',
         'type',
         'content',
+        'media_url',
+        'media_mime_type',
+        'media_filename',
         'template_name',
         'wamid',
         'status',
@@ -34,6 +38,11 @@ class WhatsAppMessage extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(WhatsAppAccount::class, 'whatsapp_account_id');
+    }
+
+    public function conversation(): BelongsTo
+    {
+        return $this->belongsTo(WhatsAppConversation::class, 'whatsapp_conversation_id');
     }
 
     public function contact(): BelongsTo

@@ -32,4 +32,14 @@ class WhatsAppAccount extends Model
     {
         return $this->hasMany(WhatsAppMessage::class, 'whatsapp_account_id');
     }
+
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(WhatsAppConversation::class, 'whatsapp_account_id');
+    }
+
+    public function campaigns(): HasMany
+    {
+        return $this->hasMany(WhatsAppCampaign::class, 'whatsapp_account_id');
+    }
 }
