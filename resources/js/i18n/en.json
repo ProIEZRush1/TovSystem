@@ -94,7 +94,8 @@
         "bulkLabels": "Assign Label",
         "attach": "Add",
         "detach": "Remove",
-        "noLabels": "No labels"
+        "noLabels": "No labels",
+        "noLabel": "No label"
     },
     "statuses": {
         "title": "Statuses",

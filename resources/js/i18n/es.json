@@ -94,7 +94,8 @@
         "bulkLabels": "Asignar Etiqueta",
         "attach": "Agregar",
         "detach": "Quitar",
-        "noLabels": "Sin etiquetas"
+        "noLabels": "Sin etiquetas",
+        "noLabel": "Sin etiqueta"
     },
     "statuses": {
         "title": "Estados",

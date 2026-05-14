@@ -177,9 +177,10 @@ const statusOptions = computed(() =>
     props.statuses.map(s => ({ value: s.id, label: s.name }))
 );
 
-const labelOptions = computed(() =>
-    props.labels.map(l => ({ value: l.id, label: l.name }))
-);
+const labelOptions = computed(() => [
+    { value: 'none', label: t('labels.noLabel') },
+    ...props.labels.map(l => ({ value: l.id, label: l.name })),
+]);
 
 const countryOptions = computed(() =>
     props.countries.map(c => ({ value: c, label: c }))

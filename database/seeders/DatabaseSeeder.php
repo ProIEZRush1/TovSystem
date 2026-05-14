@@ -13,5 +13,11 @@ class DatabaseSeeder extends Seeder
             SuperAdminSeeder::class,
             StatusesSeeder::class,
         ]);
+
+        // Ensure "Nuevos" label exists for auto-tagging new contacts
+        \App\Models\Label::firstOrCreate(
+            ['slug' => 'nuevos'],
+            ['name' => 'Nuevos', 'color' => '#3B82F6', 'sort_order' => 99]
+        );
     }
 }

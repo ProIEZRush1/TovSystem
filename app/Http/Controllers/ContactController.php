@@ -560,10 +560,20 @@ class ContactController extends Controller
 
             // Attach labels. In only_new mode, only attach to newly created contacts.
             // In fill_empty / overwrite, attach to every processed contact.
-            if ($target && !empty($validated['label_ids'])) {
+            $labelIdsToAttach = $validated['label_ids'] ?? [];
+
+            // Auto-assign "Nuevos" label to new contacts when no labels selected
+            if ($isNew && empty($labelIdsToAttach)) {
+                $nuevosLabel = \App\Models\Label::where('slug', 'nuevos')->first();
+                if ($nuevosLabel) {
+                    $labelIdsToAttach = [$nuevosLabel->id];
+                }
+            }
+
+            if ($target && !empty($labelIdsToAttach)) {
                 if ($mode !== 'only_new' || $isNew) {
                     $alreadyHad = $target->labels()->pluck('labels.id')->toArray();
-                    $newlyAttached = array_values(array_diff($validated['label_ids'], $alreadyHad));
+                    $newlyAttached = array_values(array_diff($labelIdsToAttach, $alreadyHad));
                     if (!empty($newlyAttached)) {
                         $target->labels()->syncWithoutDetaching($newlyAttached);
                         $labelsAttached[$target->id] = $newlyAttached;
