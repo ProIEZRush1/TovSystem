@@ -238,6 +238,7 @@
         "fetchingId": "Buscando Phone Number ID...",
         "connected": "Conectado",
         "notConnected": "Sin conectar",
+        "notConnectedHint": "El telefono no esta conectado. Verifica el WABA ID, el token y el numero de telefono.",
         "templatesTitle": "Plantillas",
         "newTemplate": "Nueva Plantilla",
         "tplName": "Nombre",

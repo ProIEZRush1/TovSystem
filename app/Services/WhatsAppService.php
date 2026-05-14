@@ -15,23 +15,35 @@ class WhatsAppService
     /**
      * Fetch phone numbers from the WABA and update the account.
      */
+    /**
+     * Returns ['success' => bool, 'data' => array, 'error' => ?string].
+     */
     public function fetchPhoneNumbers(WhatsAppAccount $account): array
     {
         $url = self::BASE_URL . '/' . self::API_VERSION . '/' . $account->waba_id . '/phone_numbers';
 
-        $response = Http::withToken($account->access_token)
-            ->get($url);
+        try {
+            $response = Http::withToken($account->access_token)->get($url);
+        } catch (\Throwable $e) {
+            Log::error('WhatsApp API: Connection failed fetching phone numbers', [
+                'account_id' => $account->id,
+                'error' => $e->getMessage(),
+            ]);
+            return ['success' => false, 'data' => [], 'error' => 'Connection error: ' . $e->getMessage()];
+        }
 
         if (!$response->successful()) {
+            $err = $response->json('error.message', $response->body());
             Log::error('WhatsApp API: Failed to fetch phone numbers', [
                 'account_id' => $account->id,
                 'status' => $response->status(),
                 'body' => $response->body(),
             ]);
-            return [];
+            return ['success' => false, 'data' => [], 'error' => $err];
         }
 
         $data = $response->json('data', []);
+        $matched = false;
 
         // Auto-match and update the account's phone_number_id
         foreach ($data as $phone) {
@@ -44,11 +56,21 @@ class WhatsAppService
                     'verified_name' => $phone['verified_name'] ?? null,
                     'quality_rating' => $phone['quality_rating'] ?? null,
                 ]);
+                $matched = true;
                 break;
             }
         }
 
-        return $data;
+        if (!$matched && !empty($data)) {
+            $available = collect($data)->pluck('display_phone_number')->implode(', ');
+            return ['success' => true, 'data' => $data, 'error' => "Tu numero {$account->phone_number} no coincide con los de esta WABA. Numeros disponibles: {$available}"];
+        }
+
+        if (empty($data)) {
+            return ['success' => true, 'data' => [], 'error' => 'Esta WABA no tiene numeros de telefono registrados.'];
+        }
+
+        return ['success' => true, 'data' => $data, 'error' => null];
     }
 
     /**

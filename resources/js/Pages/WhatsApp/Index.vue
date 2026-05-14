@@ -19,6 +19,7 @@ const editingId = ref(null);
 const showDeleteModal = ref(false);
 const deleteId = ref(null);
 const refreshingId = ref(null);
+const refreshError = ref('');
 
 const form = useForm({
     name: '',
@@ -74,11 +75,16 @@ function deleteAccount() {
 
 async function refreshAccount(id) {
     refreshingId.value = id;
+    refreshError.value = '';
     try {
-        await axios.post(route('whatsapp.refresh', id));
-        window.location.reload();
+        const r = await axios.post(route('whatsapp.refresh', id));
+        if (r.data.error) {
+            refreshError.value = r.data.error;
+        } else {
+            window.location.reload();
+        }
     } catch (e) {
-        console.error('Refresh failed', e);
+        refreshError.value = e.response?.data?.message || 'Error al conectar con Meta API';
     } finally {
         refreshingId.value = null;
     }
@@ -157,7 +163,7 @@ async function refreshAccount(id) {
                                 <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
                                 {{ t('whatsapp.connected') }}
                             </span>
-                            <span v-else class="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                            <span v-else class="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700" :title="t('whatsapp.notConnectedHint')">
                                 {{ t('whatsapp.notConnected') }}
                             </span>
                         </div>
@@ -167,6 +173,20 @@ async function refreshAccount(id) {
                             <p v-if="account.verified_name"><span class="font-medium">{{ t('whatsapp.verifiedName') }}:</span> {{ account.verified_name }}</p>
                             <p v-if="account.quality_rating"><span class="font-medium">{{ t('whatsapp.qualityRating') }}:</span> {{ account.quality_rating }}</p>
                             <p><span class="font-medium">{{ t('whatsapp.messages') }}:</span> {{ account.messages_count }}</p>
+                        </div>
+                        <!-- Not connected help -->
+                        <div v-if="!account.phone_number_id" class="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                            <p class="font-medium">No se pudo conectar. Haz clic en "Actualizar" para reintentar, o verifica:</p>
+                            <ul class="mt-1 list-disc list-inside space-y-0.5 text-amber-700">
+                                <li>Que el WABA ID sea correcto (se ve en Meta Business Settings)</li>
+                                <li>Que el Access Token sea valido y no haya expirado</li>
+                                <li>Que el telefono coincida con uno registrado en la WABA</li>
+                            </ul>
+                        </div>
+                        <!-- Refresh error -->
+                        <div v-if="refreshError" class="mt-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                            <p class="font-medium">Error de Meta API:</p>
+                            <p class="mt-0.5">{{ refreshError }}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">

@@ -238,6 +238,7 @@
         "fetchingId": "Fetching Phone Number ID...",
         "connected": "Connected",
         "notConnected": "Not connected",
+        "notConnectedHint": "Phone not connected. Verify the WABA ID, token and phone number.",
         "templatesTitle": "Templates",
         "newTemplate": "New Template",
         "tplName": "Name",

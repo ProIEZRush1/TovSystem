@@ -38,9 +38,13 @@ class WhatsAppController extends Controller
         $account = WhatsAppAccount::create($validated);
 
         // Auto-fetch phone number ID
-        $whatsApp->fetchPhoneNumbers($account);
+        $result = $whatsApp->fetchPhoneNumbers($account);
 
-        return back()->with('success', 'WhatsApp account added.');
+        if (!empty($result['error'])) {
+            return back()->with('error', 'Cuenta creada pero: ' . $result['error']);
+        }
+
+        return back()->with('success', 'Cuenta WhatsApp agregada y conectada.');
     }
 
     public function update(Request $request, WhatsAppAccount $account, WhatsAppService $whatsApp): RedirectResponse
@@ -76,13 +80,15 @@ class WhatsAppController extends Controller
 
     public function refresh(WhatsAppAccount $account, WhatsAppService $whatsApp): JsonResponse
     {
-        $phones = $whatsApp->fetchPhoneNumbers($account->fresh());
+        $result = $whatsApp->fetchPhoneNumbers($account->fresh());
+        $account->refresh();
 
         return response()->json([
-            'phone_number_id' => $account->fresh()->phone_number_id,
-            'verified_name' => $account->fresh()->verified_name,
-            'quality_rating' => $account->fresh()->quality_rating,
-            'phones' => $phones,
+            'phone_number_id' => $account->phone_number_id,
+            'verified_name' => $account->verified_name,
+            'quality_rating' => $account->quality_rating,
+            'error' => $result['error'] ?? null,
+            'phones' => $result['data'] ?? [],
         ]);
     }
 
