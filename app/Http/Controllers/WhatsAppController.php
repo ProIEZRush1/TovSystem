@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Contact;
+use App\Helpers\PhoneCountryHelper;
 use App\Models\WhatsAppAccount;
 use App\Models\WhatsAppMessage;
 use App\Services\WhatsAppService;
@@ -35,6 +36,7 @@ class WhatsAppController extends Controller
             'access_token' => 'required|string',
         ]);
 
+        $validated['phone_number'] = PhoneCountryHelper::normalize($validated['phone_number']);
         $account = WhatsAppAccount::create($validated);
 
         // Auto-fetch phone number ID
@@ -61,6 +63,9 @@ class WhatsAppController extends Controller
             unset($validated['access_token']);
         }
 
+        if (isset($validated['phone_number'])) {
+            $validated['phone_number'] = PhoneCountryHelper::normalize($validated['phone_number']);
+        }
         $account->update($validated);
 
         // Re-fetch phone number ID if token changed

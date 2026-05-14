@@ -50,7 +50,9 @@ class WhatsAppService
             $displayPhone = preg_replace('/[^0-9]/', '', $phone['display_phone_number'] ?? '');
             $accountPhone = preg_replace('/[^0-9]/', '', $account->phone_number);
 
-            if ($displayPhone === $accountPhone || str_ends_with($displayPhone, $accountPhone) || str_ends_with($accountPhone, $displayPhone)) {
+            $last10Display = substr($displayPhone, -10);
+            $last10Account = substr($accountPhone, -10);
+            if ($displayPhone === $accountPhone || $last10Display === $last10Account || str_ends_with($displayPhone, $accountPhone) || str_ends_with($accountPhone, $displayPhone)) {
                 $account->update([
                     'phone_number_id' => $phone['id'],
                     'verified_name' => $phone['verified_name'] ?? null,
