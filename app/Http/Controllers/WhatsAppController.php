@@ -232,6 +232,25 @@ class WhatsAppController extends Controller
         return response()->json(['sent' => $sent, 'failed' => $failed]);
     }
 
+    public function uploadMedia(WhatsAppAccount $account, Request $request, WhatsAppService $whatsApp): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|max:16384',
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->getRealPath();
+        $mime = $file->getMimeType();
+
+        $mediaId = $whatsApp->uploadMedia($account, $path, $mime);
+
+        if (!$mediaId) {
+            return response()->json(['error' => 'Failed to upload media to Meta'], 422);
+        }
+
+        return response()->json(['media_id' => $mediaId]);
+    }
+
     public function templates(WhatsAppAccount $account, WhatsAppService $whatsApp): JsonResponse
     {
         $templates = $whatsApp->fetchTemplates($account);

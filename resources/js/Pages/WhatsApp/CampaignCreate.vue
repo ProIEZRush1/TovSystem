@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { useI18n } from 'vue-i18n';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import axios from 'axios';
 
 const { t } = useI18n();
 const props = defineProps({ account: Object, templates: Array });
@@ -39,6 +40,49 @@ const detectedParams = computed(() => {
     return [...new Set(matches.map(m => m.replace(/[{}]/g, '')))];
 });
 
+// Detect if template has IMAGE or VIDEO header
+const headerType = computed(() => {
+    if (!selectedTemplate.value) return null;
+    const header = (selectedTemplate.value.components || []).find(c => c.type === 'HEADER');
+    if (!header) return null;
+    return header.format; // TEXT, IMAGE, VIDEO
+});
+
+const needsMediaUpload = computed(() => ['IMAGE', 'VIDEO'].includes(headerType.value));
+
+const mediaFile = ref(null);
+const mediaPreview = ref(null);
+const uploadingMedia = ref(false);
+const uploadedMediaId = ref(null);
+const uploadError = ref('');
+
+function onMediaSelected(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    mediaFile.value = file;
+    mediaPreview.value = URL.createObjectURL(file);
+    uploadedMediaId.value = null;
+    uploadError.value = '';
+}
+
+async function uploadMediaToMeta() {
+    if (!mediaFile.value) return;
+    uploadingMedia.value = true;
+    uploadError.value = '';
+    try {
+        const formData = new FormData();
+        formData.append('file', mediaFile.value);
+        const r = await axios.post(route('whatsapp.upload-media', props.account.id), formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        uploadedMediaId.value = r.data.media_id;
+    } catch (e) {
+        uploadError.value = 'Error al subir: ' + (e.response?.data?.error || e.message);
+    } finally {
+        uploadingMedia.value = false;
+    }
+}
+
 const hasFlowButton = computed(() => {
     if (!selectedTemplate.value) return false;
     const btn = (selectedTemplate.value.components || []).find(c => c.type === 'BUTTONS');
@@ -56,6 +100,14 @@ function onTemplateSelect() {
 
 function buildComponents() {
     const components = [];
+    // Media header (image/video)
+    if (needsMediaUpload.value && uploadedMediaId.value) {
+        const mediaType = headerType.value === 'VIDEO' ? 'video' : 'image';
+        components.push({
+            type: 'header',
+            parameters: [{ type: mediaType, [mediaType]: { id: uploadedMediaId.value } }],
+        });
+    }
     if (detectedParams.value.length) {
         components.push({
             type: 'body',
@@ -120,6 +172,25 @@ function paramLabel(p) { return '{{' + p + '}}'; }
                     <div v-if="selectedTemplate" class="rounded-lg bg-green-50 border border-green-200 p-4">
                         <p class="text-xs font-medium text-green-700 mb-1">Vista previa del cuerpo:</p>
                         <p class="text-sm text-green-900 whitespace-pre-wrap">{{ bodyText }}</p>
+                    </div>
+
+                    <!-- Media upload for IMAGE/VIDEO headers -->
+                    <div v-if="needsMediaUpload" class="rounded-lg bg-blue-50 border border-blue-200 p-4 space-y-3">
+                        <p class="text-sm font-medium text-blue-800">
+                            Este template requiere {{ headerType === 'VIDEO' ? 'un video' : 'una imagen' }} de encabezado
+                        </p>
+                        <input type="file" :accept="headerType === 'VIDEO' ? 'video/mp4,video/3gpp' : 'image/jpeg,image/png'" @change="onMediaSelected" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100" />
+                        <!-- Preview -->
+                        <div v-if="mediaPreview">
+                            <video v-if="headerType === 'VIDEO'" :src="mediaPreview" controls class="max-h-32 rounded-lg" />
+                            <img v-else :src="mediaPreview" class="max-h-32 rounded-lg" />
+                        </div>
+                        <!-- Upload button -->
+                        <button v-if="mediaFile && !uploadedMediaId" @click="uploadMediaToMeta" :disabled="uploadingMedia" type="button" class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
+                            {{ uploadingMedia ? 'Subiendo...' : 'Subir a WhatsApp' }}
+                        </button>
+                        <p v-if="uploadedMediaId" class="text-sm text-green-700 font-medium">Subido (ID: {{ uploadedMediaId }})</p>
+                        <p v-if="uploadError" class="text-sm text-red-700">{{ uploadError }}</p>
                     </div>
 
                     <!-- Variable inputs -->

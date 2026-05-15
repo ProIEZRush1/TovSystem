@@ -118,6 +118,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/whatsapp/{account}/send', [WhatsAppController::class, 'send'])->name('whatsapp.send');
         Route::post('/whatsapp/{account}/send-template', [WhatsAppController::class, 'sendTemplate'])->name('whatsapp.send-template');
         Route::post('/whatsapp/{account}/bulk-send', [WhatsAppController::class, 'bulkSend'])->name('whatsapp.bulk-send');
+        Route::post('/whatsapp/{account}/upload-media', [WhatsAppController::class, 'uploadMedia'])->name('whatsapp.upload-media');
         Route::post('/whatsapp/{account}/templates', [WhatsAppController::class, 'createTemplate'])->name('whatsapp.templates.create');
         Route::delete('/whatsapp/{account}/templates/{name}', [WhatsAppController::class, 'deleteTemplate'])->name('whatsapp.templates.delete');
 
