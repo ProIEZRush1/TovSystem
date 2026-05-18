@@ -32,17 +32,28 @@ const form = ref({
     button_phone: '',
 });
 
+const paramExamples = ref({});
+
 const detectedParams = computed(() => {
     const matches = (form.value.body_text || '').match(/\{\{([a-z0-9_]+)\}\}/gi) || [];
     return [...new Set(matches.map(m => m.replace(/[{}]/g, '')))];
 });
 
+const isNumberedParams = computed(() => {
+    return detectedParams.value.every(p => /^\d+$/.test(p));
+});
+
 const bodyExample = computed(() => {
     if (!detectedParams.value.length) return null;
+    if (isNumberedParams.value) {
+        return {
+            body_text: [detectedParams.value.map(p => paramExamples.value[p] || `Ejemplo${p}`)],
+        };
+    }
     return {
-        body_text_named_params: detectedParams.value.map((p, i) => ({
+        body_text_named_params: detectedParams.value.map(p => ({
             param_name: p,
-            example: `Sample${i + 1}`,
+            example: paramExamples.value[p] || `Ejemplo`,
         })),
     };
 });
@@ -128,6 +139,7 @@ function resetForm() {
         button_url: '',
         button_phone: '',
     };
+    paramExamples.value = {};
 }
 
 // Delete
@@ -245,11 +257,24 @@ function getBodyText(tpl) {
                     <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('whatsapp.tplBody') }}</label>
                     <textarea v-model="form.body_text" rows="5" maxlength="1024" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" :placeholder="t('whatsapp.tplBodyPlaceholder')"></textarea>
                     <p class="text-xs text-slate-500 mt-1">{{ t('whatsapp.tplBodyHint') }}</p>
-                    <div v-if="detectedParams.length" class="mt-2 flex flex-wrap gap-1.5">
-                        <span class="text-xs text-slate-500">{{ t('whatsapp.tplDetectedParams') }}:</span>
-                        <span v-for="p in detectedParams" :key="p" class="inline-flex items-center rounded-full bg-brand-50 text-brand-700 px-2 py-0.5 text-xs font-medium">
-                            {{ paramLabel(p) }}
-                        </span>
+                    <div v-if="detectedParams.length" class="mt-3 rounded-lg bg-brand-50 border border-brand-200 p-3 space-y-2">
+                        <p class="text-xs font-medium text-brand-800">Variables detectadas — Meta requiere un ejemplo para cada una:</p>
+                        <div v-for="p in detectedParams" :key="p" class="flex items-center gap-2">
+                            <span class="shrink-0 inline-flex items-center rounded-full bg-brand-100 text-brand-700 px-2.5 py-0.5 text-xs font-mono font-medium">{{ paramLabel(p) }}</span>
+                            <input v-model="paramExamples[p]" type="text" class="flex-1 rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" :placeholder="'Ejemplo: ' + (p === '1' || p === 'nombre' || p === 'nombre_contacto' || p === 'name' || p === 'contact_name' ? 'Juan Perez' : p === '2' ? '15 de mayo 2026' : 'valor de ejemplo')" />
+                        </div>
+                        <p class="text-xs text-brand-600">Estos ejemplos son solo para la revision de Meta. Al enviar, se reemplazan con datos reales.</p>
+                    </div>
+
+                    <!-- Variable help -->
+                    <div class="mt-2 rounded-lg bg-slate-50 border border-slate-200 p-3">
+                        <p class="text-xs font-medium text-slate-700 mb-1">Como usar variables:</p>
+                        <ul class="text-xs text-slate-600 space-y-0.5 list-disc list-inside">
+                            <li>Numeradas: escribe <code>Hola </code><code>1</code><code>, tu cita es el </code><code>2</code> (Meta usa numeros)</li>
+                            <li>Con nombre: escribe <code>Hola </code><code>nombre</code><code>, bienvenido</code></li>
+                            <li>Las variables NO pueden estar al inicio ni al final del texto</li>
+                            <li>Cada variable necesita un valor de ejemplo para que Meta apruebe</li>
+                        </ul>
                     </div>
                 </div>
 
