@@ -186,6 +186,11 @@ function paramLabel(p) {
     return '{{' + p + '}}';
 }
 
+function insertVariable(varName) {
+    const v = '{{' + varName + '}}';
+    form.value.body_text = (form.value.body_text || '') + v;
+}
+
 function getBodyText(tpl) {
     const body = (tpl.components || []).find(c => c.type === 'BODY');
     return body?.text || '';
@@ -266,16 +271,14 @@ function getBodyText(tpl) {
                         <p class="text-xs text-brand-600">Estos ejemplos son solo para la revision de Meta. Al enviar, se reemplazan con datos reales.</p>
                     </div>
 
-                    <!-- Variable help -->
-                    <div class="mt-2 rounded-lg bg-slate-50 border border-slate-200 p-3">
-                        <p class="text-xs font-medium text-slate-700 mb-1">Como usar variables:</p>
-                        <ul class="text-xs text-slate-600 space-y-0.5 list-disc list-inside">
-                            <li>Numeradas: escribe <code>Hola </code><code>1</code><code>, tu cita es el </code><code>2</code> (Meta usa numeros)</li>
-                            <li>Con nombre: escribe <code>Hola </code><code>nombre</code><code>, bienvenido</code></li>
-                            <li>Las variables NO pueden estar al inicio ni al final del texto</li>
-                            <li>Cada variable necesita un valor de ejemplo para que Meta apruebe</li>
-                        </ul>
+                    <!-- Insert variable buttons -->
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <span class="text-xs text-slate-500">Insertar variable:</span>
+                        <button v-for="v in ['1', '2', '3', 'nombre', 'fecha']" :key="v" type="button" @click="insertVariable(v)" class="inline-flex items-center gap-1 rounded-full bg-brand-50 border border-brand-200 px-2.5 py-1 text-xs font-mono font-medium text-brand-700 hover:bg-brand-100 transition cursor-pointer">
+                            + {{ paramLabel(v) }}
+                        </button>
                     </div>
+                    <p class="text-xs text-slate-400 mt-1">Las variables NO pueden estar al inicio ni al final del texto. Cada una necesita un ejemplo.</p>
                 </div>
 
                 <div>
