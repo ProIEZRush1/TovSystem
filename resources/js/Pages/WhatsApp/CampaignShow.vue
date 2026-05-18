@@ -63,10 +63,8 @@ function statusColor(s) {
                     <h2 class="text-xl font-bold text-slate-900">{{ campaign.name }}</h2>
                     <p class="text-sm text-slate-500">Template: {{ campaign.template_name }} ({{ campaign.template_language }})</p>
                 </div>
-                <div class="ml-auto flex gap-2">
-                    <button v-if="liveStatus === 'draft'" @click="sendCampaign" class="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 transition">
-                        Enviar a {{ campaign.total_recipients.toLocaleString() }} contactos
-                    </button>
+                <div class="ml-auto flex items-center gap-2">
+                    <span :class="['inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold', liveStatus === 'draft' ? 'bg-amber-100 text-amber-700' : liveStatus === 'sending' ? 'bg-blue-100 text-blue-700' : liveStatus === 'completed' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600']">{{ liveStatus === 'draft' ? 'Borrador' : liveStatus === 'sending' ? 'Enviando...' : liveStatus === 'completed' ? 'Completada' : liveStatus === 'cancelled' ? 'Cancelada' : liveStatus }}</span>
                     <button v-if="liveStatus === 'sending'" @click="cancelCampaign" class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 transition">
                         Cancelar envio
                     </button>
@@ -96,6 +94,15 @@ function statusColor(s) {
                 <p class="text-2xl font-bold text-red-600">{{ liveFailed.toLocaleString() }}</p>
                 <p class="text-xs text-slate-500">Fallidos</p>
             </div>
+        </div>
+
+        <!-- Draft: big send button -->
+        <div v-if="liveStatus === 'draft'" class="mb-6 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 p-6 text-center">
+            <p class="text-lg font-semibold text-green-800 mb-2">Campana lista para enviar</p>
+            <p class="text-sm text-green-600 mb-4">{{ campaign.total_recipients.toLocaleString() }} contactos recibiran el template "{{ campaign.template_name }}"</p>
+            <button @click="sendCampaign" class="rounded-xl bg-green-600 px-8 py-3 text-base font-bold text-white hover:bg-green-500 shadow-lg shadow-green-200 transition">
+                Iniciar envio a {{ campaign.total_recipients.toLocaleString() }} contactos
+            </button>
         </div>
 
         <!-- Progress bar -->

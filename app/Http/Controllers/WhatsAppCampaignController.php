@@ -122,7 +122,7 @@ class WhatsAppCampaignController extends Controller
         }
 
         return redirect()->route('whatsapp.campaigns.show', [$account->id, $campaign->id])
-            ->with('success', "Campana creada con {$contacts->count()} destinatarios.");
+            ->with('success', "Campana creada con {$recipients->count()} destinatarios.");
     }
 
     public function show(WhatsAppAccount $account, WhatsAppCampaign $campaign): Response
