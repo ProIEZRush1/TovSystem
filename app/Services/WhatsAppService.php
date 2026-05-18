@@ -339,7 +339,7 @@ class WhatsAppService
     }
 
     /**
-     * Upload media to Meta for use in template headers.
+     * Upload media to Meta for sending messages (returns media ID).
      */
     public function uploadMedia(WhatsAppAccount $account, string $filePath, string $mimeType): ?string
     {
@@ -353,11 +353,51 @@ class WhatsAppService
             ]);
 
         if (!$response->successful()) {
-            Log::error('WhatsApp API: Failed to upload media', ['status' => $response->status()]);
+            Log::error('WhatsApp API: Failed to upload media', ['status' => $response->status(), 'body' => $response->body()]);
             return null;
         }
 
         return $response->json('id');
+    }
+
+    /**
+     * Upload media for template creation via resumable upload API.
+     * Returns a handle string (starts with "4:") for use in template header_handle.
+     */
+    public function uploadMediaForTemplate(WhatsAppAccount $account, string $filePath, string $mimeType): ?string
+    {
+        $fileSize = filesize($filePath);
+        $fileName = basename($filePath);
+
+        // Step 1: Create upload session
+        $r1 = Http::withToken($account->access_token)
+            ->post(self::BASE_URL . '/' . self::API_VERSION . '/app/uploads', [
+                'file_length' => $fileSize,
+                'file_type' => $mimeType,
+                'file_name' => $fileName,
+            ]);
+
+        if (!$r1->successful()) {
+            Log::error('WhatsApp API: Failed to create upload session', ['body' => $r1->body()]);
+            return null;
+        }
+
+        $uploadId = $r1->json('id');
+
+        // Step 2: Upload file data
+        $r2 = Http::withToken($account->access_token)
+            ->withHeaders(['file_offset' => 0])
+            ->withBody(file_get_contents($filePath), 'application/octet-stream')
+            ->post(self::BASE_URL . '/' . self::API_VERSION . '/' . $uploadId);
+
+        $handle = $r2->json('h');
+        if (!$handle) {
+            Log::error('WhatsApp API: Failed to upload file data', ['body' => $r2->body()]);
+            return null;
+        }
+
+        // Handle may contain multiple lines — take the first one
+        return explode("\n", $handle)[0];
     }
 
     private function mimeToExtension(string $mime): string

@@ -236,18 +236,25 @@ class WhatsAppController extends Controller
     {
         $request->validate([
             'file' => 'required|file|max:16384',
+            'for_template' => 'nullable|boolean',
         ]);
 
         $file = $request->file('file');
         $path = $file->getRealPath();
         $mime = $file->getMimeType();
 
-        $mediaId = $whatsApp->uploadMedia($account, $path, $mime);
+        if ($request->boolean('for_template')) {
+            $handle = $whatsApp->uploadMediaForTemplate($account, $path, $mime);
+            if (!$handle) {
+                return response()->json(['error' => 'Failed to upload media for template'], 422);
+            }
+            return response()->json(['media_id' => $handle]);
+        }
 
+        $mediaId = $whatsApp->uploadMedia($account, $path, $mime);
         if (!$mediaId) {
             return response()->json(['error' => 'Failed to upload media to Meta'], 422);
         }
-
         return response()->json(['media_id' => $mediaId]);
     }
 

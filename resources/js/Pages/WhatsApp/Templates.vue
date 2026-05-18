@@ -18,6 +18,42 @@ const showForm = ref(false);
 const submitting = ref(false);
 const error = ref('');
 
+// Header media state
+const headerType = ref('none');
+const headerFile = ref(null);
+const headerPreview = ref(null);
+const headerUploading = ref(false);
+const headerMediaHandle = ref(null);
+const headerUploadError = ref('');
+
+function onHeaderFileSelected(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    headerFile.value = file;
+    headerPreview.value = URL.createObjectURL(file);
+    headerMediaHandle.value = null;
+    headerUploadError.value = '';
+}
+
+async function uploadHeaderMedia() {
+    if (!headerFile.value) return;
+    headerUploading.value = true;
+    headerUploadError.value = '';
+    try {
+        const formData = new FormData();
+        formData.append('file', headerFile.value);
+        formData.append('for_template', '1');
+        const r = await axios.post(route('whatsapp.upload-media', props.account.id), formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        headerMediaHandle.value = r.data.media_id;
+    } catch (e) {
+        headerUploadError.value = e.response?.data?.error || 'Error al subir';
+    } finally {
+        headerUploading.value = false;
+    }
+}
+
 // Form state
 const form = ref({
     name: '',
@@ -60,11 +96,23 @@ const bodyExample = computed(() => {
 
 function buildComponents() {
     const components = [];
-    if (form.value.header_text.trim()) {
+    if (headerType.value === 'text' && form.value.header_text.trim()) {
         components.push({
             type: 'HEADER',
             format: 'TEXT',
             text: form.value.header_text.trim(),
+        });
+    } else if (headerType.value === 'image' && headerMediaHandle.value) {
+        components.push({
+            type: 'HEADER',
+            format: 'IMAGE',
+            example: { header_handle: [headerMediaHandle.value] },
+        });
+    } else if (headerType.value === 'video' && headerMediaHandle.value) {
+        components.push({
+            type: 'HEADER',
+            format: 'VIDEO',
+            example: { header_handle: [headerMediaHandle.value] },
         });
     }
     const body = {
@@ -140,6 +188,10 @@ function resetForm() {
         button_phone: '',
     };
     paramExamples.value = {};
+    headerType.value = 'none';
+    headerFile.value = null;
+    headerPreview.value = null;
+    headerMediaHandle.value = null;
 }
 
 // Delete
@@ -259,9 +311,30 @@ function getBodyText(tpl) {
                     </div>
                 </div>
 
+                <!-- Header type selector -->
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('whatsapp.tplHeader') }} <span class="text-slate-400 font-normal">({{ t('common.optional') }})</span></label>
-                    <input v-model="form.header_text" type="text" maxlength="60" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" :placeholder="t('whatsapp.tplHeaderPlaceholder')" />
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Encabezado <span class="text-slate-400 font-normal">(opcional)</span></label>
+                    <div class="flex gap-2 mb-3">
+                        <button v-for="opt in [{v:'none',l:'Ninguno'},{v:'text',l:'Texto'},{v:'image',l:'Imagen'},{v:'video',l:'Video'}]" :key="opt.v" type="button" @click="headerType = opt.v" :class="['rounded-lg px-3 py-1.5 text-xs font-semibold border-2 transition', headerType === opt.v ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600 hover:border-slate-300']">
+                            {{ opt.l }}
+                        </button>
+                    </div>
+                    <!-- Text header -->
+                    <input v-if="headerType === 'text'" v-model="form.header_text" type="text" maxlength="60" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" placeholder="Titulo breve" />
+                    <!-- Image/Video upload -->
+                    <div v-if="headerType === 'image' || headerType === 'video'" class="rounded-lg bg-blue-50 border border-blue-200 p-4 space-y-3">
+                        <p class="text-sm font-medium text-blue-800">{{ headerType === 'video' ? 'Sube el video del encabezado (MP4, max 16MB)' : 'Sube la imagen del encabezado (JPG/PNG, max 5MB)' }}</p>
+                        <input type="file" :accept="headerType === 'video' ? 'video/mp4,video/3gpp' : 'image/jpeg,image/png'" @change="onHeaderFileSelected" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100" />
+                        <div v-if="headerPreview">
+                            <video v-if="headerType === 'video'" :src="headerPreview" controls class="max-h-32 rounded-lg" />
+                            <img v-else :src="headerPreview" class="max-h-32 rounded-lg" />
+                        </div>
+                        <button v-if="headerFile && !headerMediaHandle" type="button" @click="uploadHeaderMedia" :disabled="headerUploading" class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
+                            {{ headerUploading ? 'Subiendo a Meta...' : 'Subir a WhatsApp' }}
+                        </button>
+                        <p v-if="headerMediaHandle" class="text-sm text-green-700 font-medium">Subido correctamente</p>
+                        <p v-if="headerUploadError" class="text-sm text-red-700">{{ headerUploadError }}</p>
+                    </div>
                 </div>
 
                 <div>
