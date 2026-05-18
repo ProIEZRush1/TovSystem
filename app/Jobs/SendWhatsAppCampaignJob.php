@@ -143,6 +143,9 @@ class SendWhatsAppCampaignJob implements ShouldQueue
                         foreach ($replacements as $key => $value) {
                             $param['text'] = str_ireplace('{{' . $key . '}}', $value, $param['text']);
                         }
+                        if (trim($param['text']) === '' || preg_match('/^\{\{.*\}\}$/', $param['text'])) {
+                            $param['text'] = $contactName ?: 'Amigo';
+                        }
                     }
                 }
             }
