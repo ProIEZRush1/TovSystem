@@ -2,7 +2,7 @@
 FROM composer:2 AS vendor
 WORKDIR /app
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --ignore-platform-req=ext-gd
 
 # Build frontend assets
 FROM node:20-alpine AS frontend
@@ -26,7 +26,11 @@ RUN apk add --no-cache \
     oniguruma-dev \
     mysql-client \
     linux-headers \
+    freetype-dev \
+    libjpeg-turbo-dev \
+    libpng-dev \
     $PHPIZE_DEPS \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
     pdo_mysql \
     zip \
@@ -34,6 +38,7 @@ RUN apk add --no-cache \
     mbstring \
     pcntl \
     opcache \
+    gd \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && apk del $PHPIZE_DEPS linux-headers \
