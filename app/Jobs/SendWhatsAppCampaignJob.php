@@ -123,7 +123,8 @@ class SendWhatsAppCampaignJob implements ShouldQueue
 
     private function resolveVariables(array $components, WhatsAppCampaignMessage $msg): array
     {
-        $contactName = $msg->contact_name ?? $msg->contact?->name ?? '';
+        $contact = $msg->contact;
+        $contactName = $msg->contact_name ?? $contact?->name ?? '';
 
         $replacements = [
             'nombre' => $contactName,
@@ -131,6 +132,8 @@ class SendWhatsAppCampaignJob implements ShouldQueue
             'contact_name' => $contactName,
             'nombre_contacto' => $contactName,
             'phone' => $msg->phone,
+            'country' => $contact?->country ?? '',
+            'status' => $contact?->status?->name ?? '',
         ];
 
         foreach ($components as &$component) {

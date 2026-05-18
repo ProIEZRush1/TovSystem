@@ -29,6 +29,7 @@ const form = useForm({
 });
 
 const templateParams = ref({});
+const paramSources = ref({});
 
 const selectedTemplate = computed(() =>
     props.templates.find(t => t.name === form.template_name)
@@ -99,7 +100,11 @@ function onTemplateSelect() {
     if (tpl) {
         form.template_language = tpl.language;
         templateParams.value = {};
-        detectedParams.value.forEach(p => { templateParams.value[p] = ''; });
+        paramSources.value = {};
+        detectedParams.value.forEach(p => {
+            paramSources.value[p] = 'contact_name';
+            templateParams.value[p] = '';
+        });
     }
 }
 
@@ -116,11 +121,13 @@ function buildComponents() {
     if (detectedParams.value.length) {
         components.push({
             type: 'body',
-            parameters: detectedParams.value.map(p => ({
-                type: 'text',
-                parameter_name: p,
-                text: templateParams.value[p] || '{{' + p + '}}',
-            })),
+            parameters: detectedParams.value.map(p => {
+                const source = paramSources.value[p] || 'contact_name';
+                if (source === 'fixed') {
+                    return { type: 'text', parameter_name: p, text: templateParams.value[p] || '' };
+                }
+                return { type: 'text', parameter_name: p, text: '{{' + source + '}}' };
+            }),
         });
     }
     if (hasFlowButton.value) {
@@ -209,14 +216,26 @@ function paramLabel(p) { return '{{' + p + '}}'; }
                         <p v-if="uploadError" class="text-sm text-red-700">{{ uploadError }}</p>
                     </div>
 
-                    <!-- Variable inputs -->
-                    <div v-if="detectedParams.length" class="space-y-2">
-                        <p class="text-sm font-medium text-slate-700">Variables del template:</p>
-                        <div v-for="p in detectedParams" :key="p" class="flex items-center gap-3">
-                            <label class="text-xs font-mono text-slate-500 w-32 shrink-0">{{ paramLabel(p) }}</label>
-                            <input v-model="templateParams[p]" type="text" class="flex-1 rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" :placeholder="'ej. nombre del contacto, texto fijo...'" />
+                    <!-- Variable inputs with dynamic source selector -->
+                    <div v-if="detectedParams.length" class="space-y-3">
+                        <p class="text-sm font-semibold text-slate-700">Variables del template:</p>
+                        <div v-for="p in detectedParams" :key="p" class="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex items-center rounded-full bg-brand-100 text-brand-700 px-2.5 py-0.5 text-xs font-mono font-medium shrink-0">{{ paramLabel(p) }}</span>
+                                <span class="text-xs text-slate-500">se reemplaza con:</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <select v-model="paramSources[p]" class="rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500 w-56 shrink-0">
+                                    <option value="contact_name">Nombre del contacto</option>
+                                    <option value="phone">Telefono del contacto</option>
+                                    <option value="country">Pais del contacto</option>
+                                    <option value="status">Estado del contacto</option>
+                                    <option value="fixed">Texto fijo (igual para todos)</option>
+                                </select>
+                                <input v-if="paramSources[p] === 'fixed'" v-model="templateParams[p]" type="text" class="flex-1 rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" placeholder="Escribe el texto fijo..." />
+                                <span v-else class="text-xs text-slate-400 italic">Se toma automaticamente de cada contacto</span>
+                            </div>
                         </div>
-                        <p class="text-xs text-slate-500">Tip: escribe el valor fijo (ej. "Kolel Tov") o deja vacio para auto-resolver nombre del contacto.</p>
                     </div>
                 </div>
 
