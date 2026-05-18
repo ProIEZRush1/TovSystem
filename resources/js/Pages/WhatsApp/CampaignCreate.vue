@@ -4,12 +4,110 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import { useI18n } from 'vue-i18n';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 
 const { t } = useI18n();
 const props = defineProps({ account: Object, templates: Array });
 
 const audienceSource = ref('contacts');
 const audienceFile = ref(null);
+
+// Excel preview state
+const excelRows = ref([]);
+const excelSelected = ref(new Set());
+const excelFilter = ref('');
+const excelParsing = ref(false);
+
+const filteredExcelRows = computed(() => {
+    if (!excelFilter.value) return excelRows.value;
+    const q = excelFilter.value.toLowerCase();
+    return excelRows.value.filter(r => (r.phone || '').toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q));
+});
+
+const allFilteredSelected = computed(() => {
+    return filteredExcelRows.value.length > 0 && filteredExcelRows.value.every(r => excelSelected.value.has(r.idx));
+});
+
+function toggleSelectAll() {
+    if (allFilteredSelected.value) {
+        filteredExcelRows.value.forEach(r => excelSelected.value.delete(r.idx));
+    } else {
+        filteredExcelRows.value.forEach(r => excelSelected.value.add(r.idx));
+    }
+    excelSelected.value = new Set(excelSelected.value);
+}
+
+function toggleRow(idx) {
+    if (excelSelected.value.has(idx)) {
+        excelSelected.value.delete(idx);
+    } else {
+        excelSelected.value.add(idx);
+    }
+    excelSelected.value = new Set(excelSelected.value);
+}
+
+function normalizePhone(raw) {
+    if (!raw) return null;
+    let phone = String(raw).replace(/[\s\-()]/g, '');
+    if (!phone.startsWith('+')) phone = '+' + phone;
+    const digits = phone.replace(/[^0-9]/g, '');
+    if (digits.length < 7) return null;
+    if (digits.length === 10) return '+521' + digits;
+    if (digits.length === 12 && digits.startsWith('52') && !digits.startsWith('521')) {
+        return '+521' + digits.slice(2);
+    }
+    return '+' + digits;
+}
+
+function parseExcelFile(file) {
+    excelParsing.value = true;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+        const phoneKeys = ['telefono', 'teléfono', 'phone', 'tel', 'celular', 'numero'];
+        const nameKeys = ['nombre', 'name', 'contacto', 'contact'];
+        const headers = Object.keys(json[0] || {});
+
+        let phoneCol = headers.find(h => phoneKeys.includes(h.toLowerCase()));
+        let nameCol = headers.find(h => nameKeys.includes(h.toLowerCase()));
+
+        if (!phoneCol) {
+            phoneCol = headers.find(h => {
+                const sample = String(json[0]?.[h] || '');
+                return /^\+?\d{7,}$/.test(sample.replace(/[\s\-()]/g, ''));
+            });
+        }
+
+        if (!phoneCol) {
+            excelRows.value = [];
+            excelParsing.value = false;
+            return;
+        }
+
+        const seen = new Set();
+        const rows = [];
+        json.forEach((row, i) => {
+            const rawPhone = String(row[phoneCol] || '').trim();
+            const phone = normalizePhone(rawPhone);
+            if (!phone || seen.has(phone)) return;
+            seen.add(phone);
+            rows.push({
+                idx: i,
+                phone,
+                name: nameCol ? String(row[nameCol] || '').trim() : '',
+                raw: row,
+            });
+        });
+
+        excelRows.value = rows;
+        excelSelected.value = new Set(rows.map(r => r.idx));
+        excelParsing.value = false;
+    };
+    reader.readAsArrayBuffer(file);
+}
 
 const form = useForm({
     name: '',
@@ -18,6 +116,7 @@ const form = useForm({
     template_components: [],
     audience_source: 'contacts',
     audience_file: null,
+    audience_rows: null,
     audience_filters: {
         status_ids: [],
         countries: [],
@@ -146,12 +245,18 @@ function onFileSelected(e) {
     if (file) {
         audienceFile.value = file;
         form.audience_file = file;
+        parseExcelFile(file);
     }
 }
 
 function submit() {
     form.template_components = buildComponents();
     form.audience_source = audienceSource.value;
+    if (audienceSource.value === 'file' && excelRows.value.length > 0) {
+        const selected = excelRows.value.filter(r => excelSelected.value.has(r.idx));
+        form.audience_rows = selected.map(r => ({ phone: r.phone, name: r.name }));
+        form.audience_file = null;
+    }
     form.post(route('whatsapp.campaigns.store', props.account.id), {
         forceFormData: true,
     });
@@ -255,11 +360,42 @@ function paramLabel(p) { return '{{' + p + '}}'; }
                         </label>
                     </div>
 
-                    <!-- File upload -->
-                    <div v-if="audienceSource === 'file'" class="rounded-lg bg-slate-50 border border-slate-200 p-4 space-y-3">
-                        <input type="file" accept=".xlsx,.xls,.csv" @change="onFileSelected" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100" />
-                        <p v-if="audienceFile" class="text-sm text-green-700 font-medium">Archivo: {{ audienceFile.name }} ({{ Math.round(audienceFile.size / 1024) }}KB)</p>
-                        <p class="text-xs text-slate-500">El archivo debe tener una columna de telefono. El sistema detecta automaticamente las columnas de telefono y nombre.</p>
+                    <!-- File upload + preview -->
+                    <div v-if="audienceSource === 'file'" class="space-y-3">
+                        <div class="rounded-lg bg-slate-50 border border-slate-200 p-4">
+                            <input type="file" accept=".xlsx,.xls,.csv" @change="onFileSelected" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100" />
+                            <p v-if="excelParsing" class="text-sm text-brand-600 mt-2">Leyendo archivo...</p>
+                        </div>
+
+                        <!-- Excel preview table -->
+                        <div v-if="excelRows.length > 0" class="rounded-lg border border-slate-200 overflow-hidden">
+                            <div class="bg-slate-50 px-4 py-3 flex items-center gap-3 border-b border-slate-200">
+                                <span class="text-sm font-semibold text-slate-700">{{ excelSelected.size }} de {{ excelRows.length }} seleccionados</span>
+                                <input v-model="excelFilter" type="text" class="flex-1 rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500 py-1.5" placeholder="Buscar por telefono o nombre..." />
+                            </div>
+                            <div class="max-h-72 overflow-y-auto">
+                                <table class="min-w-full">
+                                    <thead class="bg-slate-100 sticky top-0">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left w-10">
+                                                <input type="checkbox" :checked="allFilteredSelected" @change="toggleSelectAll" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                            </th>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">Telefono</th>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">Nombre</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        <tr v-for="row in filteredExcelRows" :key="row.idx" :class="excelSelected.has(row.idx) ? 'bg-brand-50' : ''" class="hover:bg-slate-50 cursor-pointer" @click="toggleRow(row.idx)">
+                                            <td class="px-3 py-1.5">
+                                                <input type="checkbox" :checked="excelSelected.has(row.idx)" @click.stop="toggleRow(row.idx)" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                                            </td>
+                                            <td class="px-3 py-1.5 text-sm font-mono text-slate-700">{{ row.phone }}</td>
+                                            <td class="px-3 py-1.5 text-sm text-slate-600">{{ row.name || '—' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Contact filters (only when source = contacts) -->

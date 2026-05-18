@@ -51,12 +51,20 @@ class WhatsAppCampaignController extends Controller
             'audience_filters' => 'nullable|array',
             'audience_source' => 'nullable|in:contacts,file',
             'audience_file' => 'nullable|file|mimes:xlsx,xls,csv|max:10240',
+            'audience_rows' => 'nullable|array',
+            'audience_rows.*.phone' => 'required_with:audience_rows|string',
+            'audience_rows.*.name' => 'nullable|string',
         ]);
 
         $recipients = collect();
 
-        if (($validated['audience_source'] ?? 'contacts') === 'file' && $request->hasFile('audience_file')) {
-            // Parse uploaded Excel/CSV
+        if (($validated['audience_source'] ?? 'contacts') === 'file' && !empty($validated['audience_rows'])) {
+            $recipients = collect($validated['audience_rows'])->map(fn ($r) => [
+                'contact_id' => null,
+                'phone' => PhoneCountryHelper::normalize($r['phone']),
+                'name' => $r['name'] ?? null,
+            ])->unique('phone')->values();
+        } elseif (($validated['audience_source'] ?? 'contacts') === 'file' && $request->hasFile('audience_file')) {
             $recipients = $this->parseAudienceFile($request->file('audience_file'));
         } else {
             // Build audience from system contact filters
