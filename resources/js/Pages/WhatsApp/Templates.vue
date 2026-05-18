@@ -186,8 +186,14 @@ function paramLabel(p) {
     return '{{' + p + '}}';
 }
 
-function insertVariable(varName) {
-    const v = '{{' + varName + '}}';
+const nextVarNumber = computed(() => {
+    const matches = (form.value.body_text || '').match(/\{\{(\d+)\}\}/g) || [];
+    const nums = matches.map(m => parseInt(m.replace(/[{}]/g, '')));
+    return nums.length ? Math.max(...nums) + 1 : 1;
+});
+
+function insertNextVariable() {
+    const v = '{{' + nextVarNumber.value + '}}';
     form.value.body_text = (form.value.body_text || '') + v;
 }
 
@@ -260,8 +266,7 @@ function getBodyText(tpl) {
 
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('whatsapp.tplBody') }}</label>
-                    <textarea v-model="form.body_text" rows="5" maxlength="1024" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" :placeholder="t('whatsapp.tplBodyPlaceholder')"></textarea>
-                    <p class="text-xs text-slate-500 mt-1">{{ t('whatsapp.tplBodyHint') }}</p>
+                    <textarea v-model="form.body_text" rows="5" maxlength="1024" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" placeholder="Escribe el texto y usa el boton para agregar variables..."></textarea>
                     <div v-if="detectedParams.length" class="mt-3 rounded-lg bg-brand-50 border border-brand-200 p-3 space-y-2">
                         <p class="text-xs font-medium text-brand-800">Variables detectadas — Meta requiere un ejemplo para cada una:</p>
                         <div v-for="p in detectedParams" :key="p" class="flex items-center gap-2">
@@ -271,14 +276,14 @@ function getBodyText(tpl) {
                         <p class="text-xs text-brand-600">Estos ejemplos son solo para la revision de Meta. Al enviar, se reemplazan con datos reales.</p>
                     </div>
 
-                    <!-- Insert variable buttons -->
-                    <div class="mt-2 flex flex-wrap items-center gap-2">
-                        <span class="text-xs text-slate-500">Insertar variable:</span>
-                        <button v-for="v in ['1', '2', '3', 'nombre', 'fecha']" :key="v" type="button" @click="insertVariable(v)" class="inline-flex items-center gap-1 rounded-full bg-brand-50 border border-brand-200 px-2.5 py-1 text-xs font-mono font-medium text-brand-700 hover:bg-brand-100 transition cursor-pointer">
-                            + {{ paramLabel(v) }}
+                    <!-- Single add variable button -->
+                    <div class="mt-2 flex items-center gap-3">
+                        <button type="button" @click="insertNextVariable" class="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-500 transition">
+                            <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                            Agregar Variable {{ paramLabel(String(nextVarNumber)) }}
                         </button>
+                        <span class="text-xs text-slate-400">No puede ir al inicio ni al final del texto</span>
                     </div>
-                    <p class="text-xs text-slate-400 mt-1">Las variables NO pueden estar al inicio ni al final del texto. Cada una necesita un ejemplo.</p>
                 </div>
 
                 <div>
