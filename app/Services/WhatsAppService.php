@@ -369,9 +369,16 @@ class WhatsAppService
         $fileSize = filesize($filePath);
         $fileName = basename($filePath);
 
-        // Step 1: Create upload session
+        // Get the App ID from the token
+        $appId = $this->getAppId($account);
+        if (!$appId) {
+            Log::error('WhatsApp API: Could not determine App ID for resumable upload');
+            return null;
+        }
+
+        // Step 1: Create upload session using App ID
         $r1 = Http::withToken($account->access_token)
-            ->post(self::BASE_URL . '/' . self::API_VERSION . '/app/uploads', [
+            ->post(self::BASE_URL . '/' . self::API_VERSION . '/' . $appId . '/uploads', [
                 'file_length' => $fileSize,
                 'file_type' => $mimeType,
                 'file_name' => $fileName,
@@ -386,18 +393,25 @@ class WhatsAppService
 
         // Step 2: Upload file data
         $r2 = Http::withToken($account->access_token)
-            ->withHeaders(['file_offset' => 0])
+            ->withHeaders(['file_offset' => '0'])
             ->withBody(file_get_contents($filePath), 'application/octet-stream')
             ->post(self::BASE_URL . '/' . self::API_VERSION . '/' . $uploadId);
 
         $handle = $r2->json('h');
         if (!$handle) {
-            Log::error('WhatsApp API: Failed to upload file data', ['body' => $r2->body()]);
+            Log::error('WhatsApp API: Failed to upload file data', ['upload_id' => $uploadId, 'body' => $r2->body()]);
             return null;
         }
 
-        // Handle may contain multiple lines — take the first one
-        return explode("\n", $handle)[0];
+        return trim($handle);
+    }
+
+    private function getAppId(WhatsAppAccount $account): ?string
+    {
+        $r = Http::withToken($account->access_token)
+            ->get(self::BASE_URL . '/debug_token', ['input_token' => $account->access_token]);
+
+        return $r->json('data.app_id');
     }
 
     private function mimeToExtension(string $mime): string

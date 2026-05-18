@@ -153,6 +153,19 @@ function buildComponents() {
 
 async function submit() {
     if (!form.value.name || !form.value.body_text) return;
+    const bodyTrimmed = form.value.body_text.trim();
+    if (/^\{\{[^}]+\}\}/.test(bodyTrimmed)) {
+        error.value = 'Meta no permite variables al INICIO del texto. Agrega texto antes de la variable.';
+        return;
+    }
+    if (/\{\{[^}]+\}\}$/.test(bodyTrimmed)) {
+        error.value = 'Meta no permite variables al FINAL del texto. Agrega texto despues de la variable.';
+        return;
+    }
+    if ((headerType.value === 'image' || headerType.value === 'video') && !headerMediaHandle.value) {
+        error.value = 'Primero sube el archivo al hacer clic en "Subir a WhatsApp".';
+        return;
+    }
     submitting.value = true;
     error.value = '';
     try {
