@@ -49,36 +49,49 @@ class WhatsAppCampaignController extends Controller
             'template_language' => 'required|string|max:10',
             'template_components' => 'nullable|array',
             'audience_filters' => 'nullable|array',
+            'audience_source' => 'nullable|in:contacts,file',
+            'audience_file' => 'nullable|file|mimes:xlsx,xls,csv|max:10240',
         ]);
 
-        // Build audience from filters
-        $query = Contact::query();
-        $filters = $validated['audience_filters'] ?? [];
+        $recipients = collect();
 
-        if (!empty($filters['status_ids'])) {
-            $query->whereIn('status_id', $filters['status_ids']);
-        }
-        if (!empty($filters['countries'])) {
-            $query->whereIn('country', $filters['countries']);
-        }
-        if (!empty($filters['label_ids'])) {
-            $query->whereHas('labels', fn ($q) => $q->whereIn('labels.id', $filters['label_ids']));
-        }
-        if (!empty($filters['date_from'])) {
-            $query->where('date', '>=', $filters['date_from']);
-        }
-        if (!empty($filters['date_to'])) {
-            $query->where('date', '<=', $filters['date_to']);
-        }
-        if (!empty($filters['search'])) {
-            $query->where(fn ($q) => $q->where('phone', 'like', '%' . $filters['search'] . '%')
-                ->orWhere('name', 'like', '%' . $filters['search'] . '%'));
+        if (($validated['audience_source'] ?? 'contacts') === 'file' && $request->hasFile('audience_file')) {
+            // Parse uploaded Excel/CSV
+            $recipients = $this->parseAudienceFile($request->file('audience_file'));
+        } else {
+            // Build audience from system contact filters
+            $query = Contact::query();
+            $filters = $validated['audience_filters'] ?? [];
+
+            if (!empty($filters['status_ids'])) {
+                $ids = is_string($filters['status_ids']) ? explode(',', $filters['status_ids']) : $filters['status_ids'];
+                $query->whereIn('status_id', array_filter($ids));
+            }
+            if (!empty($filters['countries'])) {
+                $countries = is_string($filters['countries']) ? explode(',', $filters['countries']) : $filters['countries'];
+                $query->whereIn('country', array_filter($countries));
+            }
+            if (!empty($filters['label_ids'])) {
+                $ids = is_string($filters['label_ids']) ? explode(',', $filters['label_ids']) : $filters['label_ids'];
+                $query->whereHas('labels', fn ($q) => $q->whereIn('labels.id', array_filter($ids)));
+            }
+            if (!empty($filters['date_from'])) {
+                $query->where('date', '>=', $filters['date_from']);
+            }
+            if (!empty($filters['date_to'])) {
+                $query->where('date', '<=', $filters['date_to']);
+            }
+            if (!empty($filters['search'])) {
+                $query->where(fn ($q) => $q->where('phone', 'like', '%' . $filters['search'] . '%')
+                    ->orWhere('name', 'like', '%' . $filters['search'] . '%'));
+            }
+
+            $recipients = $query->whereNotNull('phone')->get(['id', 'phone', 'name'])
+                ->map(fn ($c) => ['contact_id' => $c->id, 'phone' => $c->phone, 'name' => $c->name]);
         }
 
-        $contacts = $query->whereNotNull('phone')->get(['id', 'phone', 'name']);
-
-        if ($contacts->isEmpty()) {
-            return back()->with('error', 'No se encontraron contactos con los filtros seleccionados.');
+        if ($recipients->isEmpty()) {
+            return back()->with('error', 'No se encontraron contactos. Revisa los filtros o el archivo.');
         }
 
         $campaign = WhatsAppCampaign::create([
@@ -90,15 +103,15 @@ class WhatsAppCampaignController extends Controller
             'template_components' => $validated['template_components'],
             'audience_filters' => $validated['audience_filters'],
             'status' => 'draft',
-            'total_recipients' => $contacts->count(),
+            'total_recipients' => $recipients->count(),
         ]);
 
         // Create campaign message rows
-        $rows = $contacts->map(fn ($c) => [
+        $rows = $recipients->map(fn ($r) => [
             'whatsapp_campaign_id' => $campaign->id,
-            'contact_id' => $c->id,
-            'phone' => $c->phone,
-            'contact_name' => $c->name,
+            'contact_id' => $r['contact_id'] ?? null,
+            'phone' => $r['phone'],
+            'contact_name' => $r['name'] ?? null,
             'status' => 'pending',
             'created_at' => now(),
             'updated_at' => now(),
@@ -170,6 +183,98 @@ class WhatsAppCampaignController extends Controller
             'total_recipients' => $campaign->total_recipients,
             'progress' => $campaign->progress,
         ]);
+    }
+
+    private function parseAudienceFile($file): \Illuminate\Support\Collection
+    {
+        $ext = strtolower($file->getClientOriginalExtension());
+        $recipients = collect();
+
+        if ($ext === 'csv') {
+            $handle = fopen($file->getRealPath(), 'r');
+            fgetcsv($handle); // skip header
+            while (($row = fgetcsv($handle)) !== false) {
+                $phone = $this->findPhoneInRow($row);
+                $name = $this->findNameInRow($row);
+                if ($phone) {
+                    $recipients->push(['contact_id' => null, 'phone' => $phone, 'name' => $name]);
+                }
+            }
+            fclose($handle);
+        } elseif (in_array($ext, ['xlsx', 'xls'])) {
+            $reader = new \PhpOffice\PhpSpreadsheet\Reader\Xlsx();
+            $reader->setReadDataOnly(true);
+            try {
+                $spreadsheet = $reader->load($file->getRealPath());
+            } catch (\Throwable $e) {
+                $reader = new \PhpOffice\PhpSpreadsheet\Reader\Xls();
+                $reader->setReadDataOnly(true);
+                $spreadsheet = $reader->load($file->getRealPath());
+            }
+            $sheet = $spreadsheet->getActiveSheet();
+            $phoneCol = null;
+            $nameCol = null;
+
+            // Auto-detect columns from header row
+            foreach ($sheet->getRowIterator(1, 1) as $row) {
+                foreach ($row->getCellIterator() as $cell) {
+                    $val = strtolower(trim($cell->getValue() ?? ''));
+                    if (in_array($val, ['telefono', 'teléfono', 'phone', 'tel', 'celular', 'numero'])) {
+                        $phoneCol = $cell->getColumn();
+                    }
+                    if (in_array($val, ['nombre', 'name', 'contacto', 'contact'])) {
+                        $nameCol = $cell->getColumn();
+                    }
+                }
+            }
+
+            // If no header match, try col B=phone, col C=name (common format)
+            if (!$phoneCol) {
+                $phoneCol = 'B';
+                $nameCol = $nameCol ?: 'C';
+            }
+
+            $maxRow = $sheet->getHighestRow();
+            for ($r = 2; $r <= $maxRow; $r++) {
+                $rawPhone = $sheet->getCell($phoneCol . $r)->getValue();
+                $rawName = $nameCol ? $sheet->getCell($nameCol . $r)->getValue() : null;
+
+                if (!$rawPhone || !is_string($rawPhone) && !is_numeric($rawPhone)) continue;
+
+                $phone = \App\Helpers\PhoneCountryHelper::normalize((string) $rawPhone);
+                if (preg_match('/[a-zA-Z]/', $phone) || strlen(preg_replace('/[^0-9]/', '', $phone)) < 7) continue;
+
+                $name = is_string($rawName) ? trim($rawName) : null;
+                $recipients->push(['contact_id' => null, 'phone' => $phone, 'name' => $name]);
+            }
+        }
+
+        // Deduplicate by phone
+        return $recipients->unique('phone')->values();
+    }
+
+    private function findPhoneInRow(array $row): ?string
+    {
+        foreach ($row as $cell) {
+            if (!$cell) continue;
+            $cleaned = preg_replace('/[^0-9+]/', '', $cell);
+            if (strlen($cleaned) >= 7 && preg_match('/^\+?\d{7,}$/', $cleaned)) {
+                return \App\Helpers\PhoneCountryHelper::normalize($cleaned);
+            }
+        }
+        return null;
+    }
+
+    private function findNameInRow(array $row): ?string
+    {
+        foreach ($row as $cell) {
+            if (!$cell) continue;
+            $trimmed = trim($cell);
+            if (strlen($trimmed) > 1 && !preg_match('/^\+?\d/', $trimmed) && !str_contains($trimmed, '@')) {
+                return $trimmed;
+            }
+        }
+        return null;
     }
 
     public function destroy(WhatsAppAccount $account, WhatsAppCampaign $campaign): RedirectResponse

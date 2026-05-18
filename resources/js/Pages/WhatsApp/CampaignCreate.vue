@@ -8,11 +8,16 @@ import axios from 'axios';
 const { t } = useI18n();
 const props = defineProps({ account: Object, templates: Array });
 
+const audienceSource = ref('contacts');
+const audienceFile = ref(null);
+
 const form = useForm({
     name: '',
     template_name: '',
     template_language: '',
     template_components: [],
+    audience_source: 'contacts',
+    audience_file: null,
     audience_filters: {
         status_ids: [],
         countries: [],
@@ -129,9 +134,20 @@ function buildComponents() {
     return components;
 }
 
+function onFileSelected(e) {
+    const file = e.target.files[0];
+    if (file) {
+        audienceFile.value = file;
+        form.audience_file = file;
+    }
+}
+
 function submit() {
     form.template_components = buildComponents();
-    form.post(route('whatsapp.campaigns.store', props.account.id));
+    form.audience_source = audienceSource.value;
+    form.post(route('whatsapp.campaigns.store', props.account.id), {
+        forceFormData: true,
+    });
 }
 
 function paramLabel(p) { return '{{' + p + '}}'; }
@@ -204,9 +220,31 @@ function paramLabel(p) { return '{{' + p + '}}'; }
                     </div>
                 </div>
 
-                <!-- Step 2: Audience Filters -->
+                <!-- Step 2: Audience -->
                 <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-900/5 space-y-4">
                     <h3 class="text-base font-semibold text-slate-900">2. Audiencia</h3>
+
+                    <!-- Source selector -->
+                    <div class="flex gap-3">
+                        <label :class="['flex-1 cursor-pointer rounded-lg border-2 p-4 text-center transition', audienceSource === 'contacts' ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300']" @click="audienceSource = 'contacts'">
+                            <p class="text-sm font-semibold" :class="audienceSource === 'contacts' ? 'text-brand-700' : 'text-slate-700'">Contactos del sistema</p>
+                            <p class="text-xs text-slate-500 mt-1">Filtra por estado, pais, etiqueta, fecha</p>
+                        </label>
+                        <label :class="['flex-1 cursor-pointer rounded-lg border-2 p-4 text-center transition', audienceSource === 'file' ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300']" @click="audienceSource = 'file'">
+                            <p class="text-sm font-semibold" :class="audienceSource === 'file' ? 'text-brand-700' : 'text-slate-700'">Subir archivo Excel/CSV</p>
+                            <p class="text-xs text-slate-500 mt-1">Sube un archivo con telefonos y nombres</p>
+                        </label>
+                    </div>
+
+                    <!-- File upload -->
+                    <div v-if="audienceSource === 'file'" class="rounded-lg bg-slate-50 border border-slate-200 p-4 space-y-3">
+                        <input type="file" accept=".xlsx,.xls,.csv" @change="onFileSelected" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100" />
+                        <p v-if="audienceFile" class="text-sm text-green-700 font-medium">Archivo: {{ audienceFile.name }} ({{ Math.round(audienceFile.size / 1024) }}KB)</p>
+                        <p class="text-xs text-slate-500">El archivo debe tener una columna de telefono. El sistema detecta automaticamente las columnas de telefono y nombre.</p>
+                    </div>
+
+                    <!-- Contact filters (only when source = contacts) -->
+                    <template v-if="audienceSource === 'contacts'">
                     <p class="text-sm text-slate-500">Filtra que contactos recibiran el mensaje. Deja vacio para enviar a todos.</p>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -236,6 +274,7 @@ function paramLabel(p) { return '{{' + p + '}}'; }
                             <input v-model="form.audience_filters.date_to" type="date" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" />
                         </div>
                     </div>
+                    </template>
                 </div>
 
                 <!-- Submit -->
