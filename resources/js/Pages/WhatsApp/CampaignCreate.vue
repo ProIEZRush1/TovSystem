@@ -16,12 +16,33 @@ const audienceFile = ref(null);
 const excelRows = ref([]);
 const excelSelected = ref(new Set());
 const excelFilter = ref('');
+const excelCountryFilter = ref('');
 const excelParsing = ref(false);
+const excelPage = ref(1);
+const excelPerPage = 100;
+
+const excelCountries = computed(() => {
+    const set = new Set();
+    excelRows.value.forEach(r => { if (r.country) set.add(r.country); });
+    return [...set].sort();
+});
 
 const filteredExcelRows = computed(() => {
-    if (!excelFilter.value) return excelRows.value;
-    const q = excelFilter.value.toLowerCase();
-    return excelRows.value.filter(r => (r.phone || '').toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q));
+    let rows = excelRows.value;
+    if (excelCountryFilter.value) {
+        rows = rows.filter(r => r.country === excelCountryFilter.value);
+    }
+    if (excelFilter.value) {
+        const q = excelFilter.value.toLowerCase();
+        rows = rows.filter(r => (r.phone || '').toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q));
+    }
+    return rows;
+});
+
+const excelTotalPages = computed(() => Math.ceil(filteredExcelRows.value.length / excelPerPage));
+const paginatedExcelRows = computed(() => {
+    const start = (excelPage.value - 1) * excelPerPage;
+    return filteredExcelRows.value.slice(start, start + excelPerPage);
 });
 
 const allFilteredSelected = computed(() => {
@@ -37,6 +58,10 @@ function toggleSelectAll() {
     excelSelected.value = new Set(excelSelected.value);
 }
 
+function selectOnlyFiltered() {
+    excelSelected.value = new Set(filteredExcelRows.value.map(r => r.idx));
+}
+
 function toggleRow(idx) {
     if (excelSelected.value.has(idx)) {
         excelSelected.value.delete(idx);
@@ -44,6 +69,12 @@ function toggleRow(idx) {
         excelSelected.value.add(idx);
     }
     excelSelected.value = new Set(excelSelected.value);
+}
+
+let filterTimer = null;
+function onFilterInput(e) {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(() => { excelFilter.value = e.target.value; excelPage.value = 1; }, 200);
 }
 
 function normalizePhone(raw) {
@@ -69,10 +100,14 @@ function parseExcelFile(file) {
 
         const phoneKeys = ['telefono', 'teléfono', 'phone', 'tel', 'celular', 'numero'];
         const nameKeys = ['nombre', 'name', 'contacto', 'contact'];
+        const countryKeys = ['pais', 'país', 'country'];
+        const statusKeys = ['estado', 'status'];
         const headers = Object.keys(json[0] || {});
 
         let phoneCol = headers.find(h => phoneKeys.includes(h.toLowerCase()));
         let nameCol = headers.find(h => nameKeys.includes(h.toLowerCase()));
+        let countryCol = headers.find(h => countryKeys.includes(h.toLowerCase()));
+        let statusCol = headers.find(h => statusKeys.includes(h.toLowerCase()));
 
         if (!phoneCol) {
             phoneCol = headers.find(h => {
@@ -98,7 +133,8 @@ function parseExcelFile(file) {
                 idx: i,
                 phone,
                 name: nameCol ? String(row[nameCol] || '').trim() : '',
-                raw: row,
+                country: countryCol ? String(row[countryCol] || '').trim() : '',
+                status: statusCol ? String(row[statusCol] || '').trim() : '',
             });
         });
 
@@ -369,31 +405,56 @@ function paramLabel(p) { return '{{' + p + '}}'; }
 
                         <!-- Excel preview table -->
                         <div v-if="excelRows.length > 0" class="rounded-lg border border-slate-200 overflow-hidden">
-                            <div class="bg-slate-50 px-4 py-3 flex items-center gap-3 border-b border-slate-200">
-                                <span class="text-sm font-semibold text-slate-700">{{ excelSelected.size }} de {{ excelRows.length }} seleccionados</span>
-                                <input v-model="excelFilter" type="text" class="flex-1 rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500 py-1.5" placeholder="Buscar por telefono o nombre..." />
+                            <!-- Toolbar -->
+                            <div class="bg-slate-50 px-4 py-3 space-y-2 border-b border-slate-200">
+                                <div class="flex items-center gap-3 flex-wrap">
+                                    <span class="text-sm font-bold text-brand-700">{{ excelSelected.size.toLocaleString() }}</span>
+                                    <span class="text-sm text-slate-500">de {{ excelRows.length.toLocaleString() }} seleccionados</span>
+                                    <button type="button" @click="toggleSelectAll" class="text-xs font-semibold text-brand-600 hover:text-brand-500">{{ allFilteredSelected ? 'Deseleccionar filtrados' : 'Seleccionar filtrados' }}</button>
+                                    <button v-if="filteredExcelRows.length !== excelRows.length" type="button" @click="selectOnlyFiltered" class="text-xs font-semibold text-amber-600 hover:text-amber-500">Solo estos {{ filteredExcelRows.length.toLocaleString() }}</button>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input :value="excelFilter" @input="onFilterInput" type="text" class="flex-1 rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500 py-1.5" placeholder="Buscar telefono o nombre..." />
+                                    <select v-if="excelCountries.length > 1" v-model="excelCountryFilter" @change="excelPage = 1" class="rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500 py-1.5 w-40">
+                                        <option value="">Todos los paises</option>
+                                        <option v-for="c in excelCountries" :key="c" :value="c">{{ c }}</option>
+                                    </select>
+                                </div>
+                                <p class="text-xs text-slate-400">Mostrando {{ paginatedExcelRows.length }} de {{ filteredExcelRows.length.toLocaleString() }} (pag. {{ excelPage }}/{{ excelTotalPages }})</p>
                             </div>
-                            <div class="max-h-72 overflow-y-auto">
+                            <!-- Table -->
+                            <div class="max-h-80 overflow-y-auto">
                                 <table class="min-w-full">
-                                    <thead class="bg-slate-100 sticky top-0">
+                                    <thead class="bg-slate-100 sticky top-0 z-10">
                                         <tr>
                                             <th class="px-3 py-2 text-left w-10">
                                                 <input type="checkbox" :checked="allFilteredSelected" @change="toggleSelectAll" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                                             </th>
                                             <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">Telefono</th>
                                             <th class="px-3 py-2 text-left text-xs font-medium text-slate-500">Nombre</th>
+                                            <th v-if="excelCountries.length" class="px-3 py-2 text-left text-xs font-medium text-slate-500">Pais</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-slate-100">
-                                        <tr v-for="row in filteredExcelRows" :key="row.idx" :class="excelSelected.has(row.idx) ? 'bg-brand-50' : ''" class="hover:bg-slate-50 cursor-pointer" @click="toggleRow(row.idx)">
+                                        <tr v-for="row in paginatedExcelRows" :key="row.idx" :class="excelSelected.has(row.idx) ? 'bg-brand-50' : ''" class="hover:bg-slate-50 cursor-pointer" @click="toggleRow(row.idx)">
                                             <td class="px-3 py-1.5">
                                                 <input type="checkbox" :checked="excelSelected.has(row.idx)" @click.stop="toggleRow(row.idx)" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                                             </td>
                                             <td class="px-3 py-1.5 text-sm font-mono text-slate-700">{{ row.phone }}</td>
                                             <td class="px-3 py-1.5 text-sm text-slate-600">{{ row.name || '—' }}</td>
+                                            <td v-if="excelCountries.length" class="px-3 py-1.5 text-xs text-slate-500">{{ row.country || '—' }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                            <!-- Pagination -->
+                            <div v-if="excelTotalPages > 1" class="bg-slate-50 px-4 py-2 border-t border-slate-200 flex items-center justify-between">
+                                <button type="button" @click="excelPage = Math.max(1, excelPage - 1)" :disabled="excelPage <= 1" class="rounded px-3 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-40">Anterior</button>
+                                <div class="flex items-center gap-1">
+                                    <button v-for="p in Math.min(excelTotalPages, 7)" :key="p" type="button" @click="excelPage = p" :class="excelPage === p ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'" class="rounded w-7 h-7 text-xs font-medium border border-slate-200">{{ p }}</button>
+                                    <span v-if="excelTotalPages > 7" class="text-xs text-slate-400">... {{ excelTotalPages }}</span>
+                                </div>
+                                <button type="button" @click="excelPage = Math.min(excelTotalPages, excelPage + 1)" :disabled="excelPage >= excelTotalPages" class="rounded px-3 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-40">Siguiente</button>
                             </div>
                         </div>
                     </div>
