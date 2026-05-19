@@ -50,6 +50,42 @@ const selectedHasFlowButton = computed(() => {
     return !!(buttonsComp?.buttons || []).find(b => b.type === 'FLOW');
 });
 
+const selectedHeaderType = computed(() => {
+    if (!selectedTemplate.value) return null;
+    const header = (selectedTemplate.value.components || []).find(c => c.type === 'HEADER');
+    return header?.format || null;
+});
+const needsHeaderMedia = computed(() => ['IMAGE', 'VIDEO'].includes(selectedHeaderType.value));
+const bulkMediaFile = ref(null);
+const bulkMediaPreview = ref(null);
+const bulkMediaUploading = ref(false);
+const bulkMediaId = ref(null);
+const bulkMediaError = ref('');
+
+function onBulkMediaSelected(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    bulkMediaFile.value = file;
+    bulkMediaPreview.value = URL.createObjectURL(file);
+    bulkMediaId.value = null;
+    bulkMediaError.value = '';
+}
+async function uploadBulkMedia() {
+    if (!bulkMediaFile.value) return;
+    bulkMediaUploading.value = true;
+    bulkMediaError.value = '';
+    try {
+        const fd = new FormData();
+        fd.append('file', bulkMediaFile.value);
+        const r = await axios.post(route('whatsapp.upload-media', props.account.id), fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        bulkMediaId.value = r.data.media_id;
+    } catch (e) {
+        bulkMediaError.value = e.response?.data?.error || 'Upload failed';
+    } finally {
+        bulkMediaUploading.value = false;
+    }
+}
+
 async function loadTemplates() {
     if (templatesLoading.value) return;
     templatesLoading.value = true;
@@ -69,6 +105,13 @@ function paramLabel(p) {
 
 function buildTemplateComponents() {
     const components = [];
+    if (needsHeaderMedia.value && bulkMediaId.value) {
+        const mediaType = selectedHeaderType.value === 'VIDEO' ? 'video' : 'image';
+        components.push({
+            type: 'header',
+            parameters: [{ type: mediaType, [mediaType]: { id: bulkMediaId.value } }],
+        });
+    }
     if (selectedBodyParams.value.length) {
         components.push({
             type: 'body',
@@ -452,6 +495,21 @@ function formatDate(dateStr) {
                                 <div class="mt-1 flex items-center justify-between">
                                     <p class="text-xs text-slate-500">{{ t('whatsapp.tplSelectHint') }}</p>
                                     <Link :href="route('whatsapp.templates-page', account.id)" class="text-xs text-brand-600 hover:text-brand-500">{{ t('whatsapp.tplManage') }} →</Link>
+                                </div>
+
+                                <!-- Media upload for IMAGE/VIDEO headers -->
+                                <div v-if="needsHeaderMedia" class="mt-3 rounded-lg bg-blue-50 border border-blue-200 p-3 space-y-2">
+                                    <p class="text-xs font-medium text-blue-800">Este template requiere {{ selectedHeaderType === 'VIDEO' ? 'un video' : 'una imagen' }}</p>
+                                    <input type="file" :accept="selectedHeaderType === 'VIDEO' ? 'video/mp4' : 'image/jpeg,image/png'" @change="onBulkMediaSelected" class="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100" />
+                                    <div v-if="bulkMediaPreview">
+                                        <video v-if="selectedHeaderType === 'VIDEO'" :src="bulkMediaPreview" controls class="max-h-24 rounded" />
+                                        <img v-else :src="bulkMediaPreview" class="max-h-24 rounded" />
+                                    </div>
+                                    <button v-if="bulkMediaFile && !bulkMediaId" type="button" @click="uploadBulkMedia" :disabled="bulkMediaUploading" class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-50">
+                                        {{ bulkMediaUploading ? 'Subiendo...' : 'Subir a WhatsApp' }}
+                                    </button>
+                                    <p v-if="bulkMediaId" class="text-xs text-green-700 font-medium">Subido correctamente</p>
+                                    <p v-if="bulkMediaError" class="text-xs text-red-700">{{ bulkMediaError }}</p>
                                 </div>
 
                                 <!-- Dynamic parameter inputs -->
