@@ -346,14 +346,14 @@ class WhatsAppService
         $url = self::BASE_URL . '/' . self::API_VERSION . '/' . $account->phone_number_id . '/media';
 
         $response = Http::withToken($account->access_token)
-            ->attach('file', file_get_contents($filePath), basename($filePath))
+            ->attach('file', file_get_contents($filePath), basename($filePath), ['Content-Type' => $mimeType])
             ->post($url, [
                 'messaging_product' => 'whatsapp',
                 'type' => $mimeType,
             ]);
 
         if (!$response->successful()) {
-            Log::error('WhatsApp API: Failed to upload media', ['status' => $response->status(), 'body' => $response->body()]);
+            Log::error('WhatsApp API: Failed to upload media', ['status' => $response->status(), 'body' => $response->body(), 'mime' => $mimeType]);
             return null;
         }
 

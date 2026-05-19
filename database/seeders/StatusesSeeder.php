@@ -17,9 +17,10 @@ class StatusesSeeder extends Seeder
         ];
 
         foreach ($statuses as $status) {
+            $slug = \Str::slug($status['name']);
             Status::updateOrCreate(
-                ['name' => $status['name']],
-                array_merge($status, ['slug' => \Str::slug($status['name'])])
+                ['slug' => $slug],
+                array_merge($status, ['slug' => $slug])
             );
         }
     }
