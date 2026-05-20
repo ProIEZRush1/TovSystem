@@ -341,7 +341,7 @@ class WhatsAppController extends Controller
             'direction' => 'outbound',
             'type' => 'template',
             'template_name' => $validated['template_name'],
-            'content' => '[template: ' . $validated['template_name'] . ']',
+            'content' => $request->input('body_preview') ?? '[plantilla: ' . $validated['template_name'] . ']',
             'wamid' => $wamid,
             'status' => 'sent',
             'sent_at' => now(),

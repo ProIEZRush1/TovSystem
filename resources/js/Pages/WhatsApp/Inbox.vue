@@ -103,10 +103,16 @@ async function sendTemplateMsg() {
                 parameters: paramValues.map(([k, v]) => ({ type: 'text', parameter_name: k, text: v })),
             });
         }
+        const tpl = availableTemplates.value.find(t => t.name === templateName.value);
+        const bodyComp = tpl?.components?.find(c => c.type === 'BODY');
+        let bodyPreview = bodyComp?.text || '';
+        paramValues.forEach(([k, v]) => { bodyPreview = bodyPreview.replace(new RegExp('\\{\\{' + k + '\\}\\}', 'gi'), v); });
+
         const r = await axios.post(route('whatsapp.inbox.send-template', [props.account.id, activeConv.value.id]), {
             template_name: templateName.value,
             language_code: templateLang.value,
             components,
+            body_preview: bodyPreview,
         });
         messages.value.push(r.data);
         showTemplateForm.value = false;
@@ -232,8 +238,16 @@ function isMedia(type) {
                                 <audio v-else-if="msg.type === 'audio'" :src="msg.media_url" controls class="max-w-full" />
                                 <a v-else-if="msg.type === 'document'" :href="msg.media_url" target="_blank" class="inline-flex items-center gap-1 text-xs underline">{{ msg.media_filename || 'Documento' }}</a>
                             </div>
-                            <p class="whitespace-pre-wrap">{{ msg.content }}</p>
-                            <p v-if="msg.template_name" class="text-xs opacity-75 mt-1">{{ msg.template_name }}</p>
+                            <!-- Template message -->
+                            <div v-if="msg.type === 'template'" class="space-y-1">
+                                <div :class="['inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold', msg.direction === 'outbound' ? 'bg-green-500/30' : 'bg-brand-100 text-brand-700']">
+                                    <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" /></svg>
+                                    {{ msg.template_name }}
+                                </div>
+                                <p v-if="msg.content" class="whitespace-pre-wrap">{{ msg.content }}</p>
+                            </div>
+                            <!-- Regular message -->
+                            <p v-else class="whitespace-pre-wrap">{{ msg.content }}</p>
                             <p v-if="msg.status === 'failed' && msg.error_message" :class="['text-xs mt-1 rounded px-2 py-1 font-medium', msg.direction === 'outbound' ? 'bg-red-500/20' : 'bg-red-50 text-red-700']">{{ msg.error_message }}</p>
                             <div class="flex items-center justify-end gap-1 mt-1">
                                 <span :class="['text-xs', msg.direction === 'outbound' ? 'text-green-200' : 'text-slate-400']">{{ formatTime(msg.sent_at || msg.created_at) }}</span>

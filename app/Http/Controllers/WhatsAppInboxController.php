@@ -150,7 +150,7 @@ class WhatsAppInboxController extends Controller
             'remote_phone' => $conversation->remote_phone,
             'direction' => 'outbound',
             'type' => 'template',
-            'content' => '[template: ' . $validated['template_name'] . ']',
+            'content' => $request->input('body_preview') ?? '[plantilla: ' . $validated['template_name'] . ']',
             'template_name' => $validated['template_name'],
             'wamid' => $wamid,
             'status' => 'sent',
