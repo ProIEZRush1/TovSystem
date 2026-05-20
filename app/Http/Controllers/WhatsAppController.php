@@ -182,8 +182,11 @@ class WhatsAppController extends Controller
             'components' => 'nullable|array',
         ]);
 
+        set_time_limit(600);
+
         $sent = 0;
         $failed = 0;
+        $errors = [];
 
         foreach ($validated['phones'] as $phone) {
             $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
@@ -223,13 +226,15 @@ class WhatsAppController extends Controller
                 $sent++;
             } else {
                 $failed++;
+                if (count($errors) < 5) {
+                    $errors[] = $cleanPhone . ': ' . ($result['error'] ?? 'Unknown error');
+                }
             }
 
-            // Rate limit: ~10 messages/second to be safe
             usleep(100000);
         }
 
-        return response()->json(['sent' => $sent, 'failed' => $failed]);
+        return response()->json(['sent' => $sent, 'failed' => $failed, 'errors' => $errors]);
     }
 
     public function uploadMedia(WhatsAppAccount $account, Request $request, WhatsAppService $whatsApp): JsonResponse

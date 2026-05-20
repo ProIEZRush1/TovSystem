@@ -525,11 +525,15 @@ function formatDate(dateStr) {
                                 <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('whatsapp.selectContacts') }}</label>
                                 <textarea v-model="bulkPhones" rows="6" class="block w-full rounded-lg border-slate-300 text-sm font-mono focus:border-brand-500 focus:ring-brand-500" placeholder="+5215512345678&#10;+5215587654321"></textarea>
                             </div>
-                            <div v-if="bulkResult && !bulkResult.error" class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm">
-                                <p class="font-medium text-green-800">{{ t('whatsapp.bulkResult', { sent: bulkResult.sent, failed: bulkResult.failed }) }}</p>
+                            <div v-if="bulkResult && !bulkResult.error" class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm space-y-1">
+                                <p class="font-medium text-green-800">{{ bulkResult.sent }} enviados, {{ bulkResult.failed }} fallidos</p>
+                                <ul v-if="bulkResult.errors?.length" class="text-xs text-red-600 space-y-0.5">
+                                    <li v-for="(err, i) in bulkResult.errors" :key="i">{{ err }}</li>
+                                </ul>
                             </div>
                             <div v-if="bulkResult?.error" class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
                                 {{ bulkResult.error }}
+                                <p v-if="bulkResult.error.includes('Bulk send failed')" class="text-xs mt-1">Para mas de 200 contactos, usa Campanas en vez de Envio Masivo.</p>
                             </div>
                         </div>
                         <div class="shrink-0 border-t border-slate-100 px-6 py-4 flex justify-end gap-3 bg-white">
