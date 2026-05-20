@@ -99,6 +99,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/whatsapp/{account}/messages', [WhatsAppController::class, 'messages'])->name('whatsapp.messages');
         Route::get('/whatsapp/{account}/templates', [WhatsAppController::class, 'templates'])->name('whatsapp.templates');
         Route::get('/whatsapp/{account}/templates-page', [WhatsAppController::class, 'templatesPage'])->name('whatsapp.templates-page');
+        Route::get('/whatsapp/{account}/billing', [WhatsAppController::class, 'billing'])->name('whatsapp.billing');
 
         // Inbox
         Route::get('/whatsapp/{account}/inbox', [WhatsAppInboxController::class, 'index'])->name('whatsapp.inbox');

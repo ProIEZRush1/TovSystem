@@ -97,6 +97,55 @@ class WhatsAppController extends Controller
         ]);
     }
 
+    public function billing(WhatsAppAccount $account, Request $request): Response
+    {
+        $from = $request->input('from', now()->startOfMonth()->toDateString());
+        $to = $request->input('to', now()->toDateString());
+
+        $baseQuery = fn () => WhatsAppMessage::where('whatsapp_account_id', $account->id)
+            ->where('direction', 'outbound')
+            ->whereBetween('created_at', [$from . ' 00:00:00', $to . ' 23:59:59']);
+
+        $templatesSent = (clone $baseQuery)()->where('type', 'template')->whereIn('status', ['sent', 'delivered', 'read'])->count();
+        $templatesDelivered = (clone $baseQuery)()->where('type', 'template')->whereIn('status', ['delivered', 'read'])->count();
+        $templatesFailed = (clone $baseQuery)()->where('type', 'template')->where('status', 'failed')->count();
+        $textSent = (clone $baseQuery)()->where('type', 'text')->whereIn('status', ['sent', 'delivered', 'read'])->count();
+        $totalOutbound = (clone $baseQuery)()->count();
+        $totalInbound = WhatsAppMessage::where('whatsapp_account_id', $account->id)
+            ->where('direction', 'inbound')
+            ->whereBetween('created_at', [$from . ' 00:00:00', $to . ' 23:59:59'])
+            ->count();
+
+        $dailyStats = WhatsAppMessage::where('whatsapp_account_id', $account->id)
+            ->where('direction', 'outbound')
+            ->whereBetween('created_at', [$from . ' 00:00:00', $to . ' 23:59:59'])
+            ->selectRaw("DATE(created_at) as date, type, status, COUNT(*) as cnt")
+            ->groupByRaw("DATE(created_at), type, status")
+            ->orderBy('date')
+            ->get();
+
+        $marketingRate = 0.53;
+        $utilityRate = 0.07;
+        $estimatedCost = round($templatesDelivered * $marketingRate, 2);
+
+        return Inertia::render('WhatsApp/Billing', [
+            'account' => $account->only(['id', 'name', 'phone_number']),
+            'stats' => [
+                'templates_sent' => $templatesSent,
+                'templates_delivered' => $templatesDelivered,
+                'templates_failed' => $templatesFailed,
+                'text_sent' => $textSent,
+                'total_outbound' => $totalOutbound,
+                'total_inbound' => $totalInbound,
+                'estimated_cost_mxn' => $estimatedCost,
+                'marketing_rate' => $marketingRate,
+                'utility_rate' => $utilityRate,
+            ],
+            'dailyStats' => $dailyStats,
+            'filters' => ['from' => $from, 'to' => $to],
+        ]);
+    }
+
     public function chat(WhatsAppAccount $account): Response
     {
         // Get distinct conversations (grouped by remote_phone)
