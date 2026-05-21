@@ -11,6 +11,7 @@ const props = defineProps({ account: Object, templates: Array });
 
 const audienceSource = ref('contacts');
 const audienceFile = ref(null);
+const pastePhones = ref('');
 
 // Excel preview state
 const excelRows = ref([]);
@@ -285,12 +286,40 @@ function onFileSelected(e) {
     }
 }
 
+function parsePastedPhones() {
+    return pastePhones.value.split('\n')
+        .map(line => {
+            const trimmed = line.trim();
+            if (!trimmed) return null;
+            const parts = trimmed.split(/[,\t]+/);
+            let phone = null, name = null;
+            for (const p of parts) {
+                const cleaned = p.trim().replace(/[\s\-()]/g, '');
+                if (/^\+?\d{7,}$/.test(cleaned)) {
+                    phone = normalizePhone(cleaned);
+                } else if (p.trim().length > 1 && !phone) {
+                    name = p.trim();
+                }
+            }
+            if (!phone) {
+                const match = trimmed.match(/\+?\d{7,}/);
+                if (match) phone = normalizePhone(match[0]);
+            }
+            return phone ? { phone, name: name || '' } : null;
+        })
+        .filter(Boolean);
+}
+
 function submit() {
     form.template_components = buildComponents();
     form.audience_source = audienceSource.value;
     if (audienceSource.value === 'file' && excelRows.value.length > 0) {
         const selected = excelRows.value.filter(r => excelSelected.value.has(r.idx));
         form.audience_rows = selected.map(r => ({ phone: r.phone, name: r.name }));
+        form.audience_file = null;
+    } else if (audienceSource.value === 'paste') {
+        form.audience_rows = parsePastedPhones();
+        form.audience_source = 'file';
         form.audience_file = null;
     }
     form.post(route('whatsapp.campaigns.store', props.account.id), {
@@ -385,14 +414,21 @@ function paramLabel(p) { return '{{' + p + '}}'; }
                     <h3 class="text-base font-semibold text-slate-900">2. Audiencia</h3>
 
                     <!-- Source selector -->
-                    <div class="flex gap-3">
-                        <label :class="['flex-1 cursor-pointer rounded-lg border-2 p-4 text-center transition', audienceSource === 'contacts' ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300']" @click="audienceSource = 'contacts'">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <label :class="['cursor-pointer rounded-lg border-2 p-4 text-center transition', audienceSource === 'contacts' ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300']" @click="audienceSource = 'contacts'">
+                            <svg class="h-6 w-6 mx-auto mb-1" :class="audienceSource === 'contacts' ? 'text-brand-600' : 'text-slate-400'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" /></svg>
                             <p class="text-sm font-semibold" :class="audienceSource === 'contacts' ? 'text-brand-700' : 'text-slate-700'">Contactos del sistema</p>
-                            <p class="text-xs text-slate-500 mt-1">Filtra por estado, pais, etiqueta, fecha</p>
+                            <p class="text-xs text-slate-500 mt-1">Filtra por estado, pais, etiqueta</p>
                         </label>
-                        <label :class="['flex-1 cursor-pointer rounded-lg border-2 p-4 text-center transition', audienceSource === 'file' ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300']" @click="audienceSource = 'file'">
-                            <p class="text-sm font-semibold" :class="audienceSource === 'file' ? 'text-brand-700' : 'text-slate-700'">Subir archivo Excel/CSV</p>
-                            <p class="text-xs text-slate-500 mt-1">Sube un archivo con telefonos y nombres</p>
+                        <label :class="['cursor-pointer rounded-lg border-2 p-4 text-center transition', audienceSource === 'file' ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300']" @click="audienceSource = 'file'">
+                            <svg class="h-6 w-6 mx-auto mb-1" :class="audienceSource === 'file' ? 'text-brand-600' : 'text-slate-400'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12H9.75m3 0H9.75m0 0H7.5m2.25 0v3m0-3v-3m9-1.5V18a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18V6.75A2.25 2.25 0 0 1 5.25 4.5h6.879a2.25 2.25 0 0 1 1.591.659l4.621 4.621c.36.36.56.849.56 1.357Z" /></svg>
+                            <p class="text-sm font-semibold" :class="audienceSource === 'file' ? 'text-brand-700' : 'text-slate-700'">Subir Excel/CSV</p>
+                            <p class="text-xs text-slate-500 mt-1">Sube archivo con telefonos</p>
+                        </label>
+                        <label :class="['cursor-pointer rounded-lg border-2 p-4 text-center transition', audienceSource === 'paste' ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300']" @click="audienceSource = 'paste'">
+                            <svg class="h-6 w-6 mx-auto mb-1" :class="audienceSource === 'paste' ? 'text-brand-600' : 'text-slate-400'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 7.5V6.108c0-1.135.845-2.098 1.976-2.192.373-.03.748-.057 1.123-.08M15.75 18H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08M15.75 18.75v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5A3.375 3.375 0 0 0 6.375 7.5H5.25m11.9-3.664A2.251 2.251 0 0 0 15 2.25h-1.5a2.251 2.251 0 0 0-2.15 1.586m5.8 0c.065.21.1.433.1.664v.75h-6V4.5c0-.231.035-.454.1-.664M6.75 7.5H4.875c-.621 0-1.125.504-1.125 1.125v12c0 .621.504 1.125 1.125 1.125h14.25c.621 0 1.125-.504 1.125-1.125V16.5a9 9 0 0 0-9-9Z" /></svg>
+                            <p class="text-sm font-semibold" :class="audienceSource === 'paste' ? 'text-brand-700' : 'text-slate-700'">Pegar lista</p>
+                            <p class="text-xs text-slate-500 mt-1">Pega telefonos directamente</p>
                         </label>
                     </div>
 
@@ -456,6 +492,16 @@ function paramLabel(p) { return '{{' + p + '}}'; }
                                 </div>
                                 <button type="button" @click="excelPage = Math.min(excelTotalPages, excelPage + 1)" :disabled="excelPage >= excelTotalPages" class="rounded px-3 py-1 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-40">Siguiente</button>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Paste phones -->
+                    <div v-if="audienceSource === 'paste'" class="space-y-3">
+                        <div class="rounded-lg bg-slate-50 border border-slate-200 p-4 space-y-3">
+                            <label class="block text-sm font-medium text-slate-700">Pega los telefonos (uno por linea)</label>
+                            <textarea v-model="pastePhones" rows="8" class="block w-full rounded-lg border-slate-300 text-sm font-mono focus:border-brand-500 focus:ring-brand-500" placeholder="Nombre, +5215512345678&#10;+5215587654321&#10;Maria Lopez, 5529316009"></textarea>
+                            <p class="text-xs text-slate-500">Formatos: solo telefono, Nombre + telefono, o telefono + Nombre. Uno por linea.</p>
+                            <p v-if="pastePhones" class="text-sm font-medium text-brand-700">{{ parsePastedPhones().length }} telefonos detectados</p>
                         </div>
                     </div>
 
