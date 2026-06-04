@@ -231,6 +231,13 @@ class WhatsAppController extends Controller
             'components' => 'nullable|array',
         ]);
 
+        if ($validated['type'] === 'template' && !empty($validated['template_name'])) {
+            $requiredHeader = $whatsApp->templateRequiresHeaderMedia($account, $validated['template_name']);
+            if ($requiredHeader && !WhatsAppService::componentsHaveHeaderMedia($validated['components'] ?? [])) {
+                return response()->json(['error' => "La plantilla requiere {$requiredHeader} de encabezado. Sube el archivo antes de enviar."], 422);
+            }
+        }
+
         set_time_limit(600);
 
         $sent = 0;
@@ -366,6 +373,11 @@ class WhatsAppController extends Controller
             'language_code' => 'required|string',
             'components' => 'nullable|array',
         ]);
+
+        $requiredHeader = $whatsApp->templateRequiresHeaderMedia($account, $validated['template_name']);
+        if ($requiredHeader && !WhatsAppService::componentsHaveHeaderMedia($validated['components'] ?? [])) {
+            return response()->json(['error' => "Esta plantilla requiere {$requiredHeader} de encabezado. Envíala desde Campañas, donde puedes subir el archivo."], 422);
+        }
 
         $result = $whatsApp->sendTemplateMessage(
             $account,

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\PhoneCountryHelper;
 use App\Jobs\SendWhatsAppCampaignJob;
 use App\Models\Contact;
 use App\Models\WhatsAppAccount;
@@ -19,6 +20,12 @@ class WhatsAppCampaignController extends Controller
     public function index(WhatsAppAccount $account): Response
     {
         $campaigns = $account->campaigns()
+            ->withCount([
+                'campaignMessages as sent_count' => fn ($q) => $q->whereIn('status', ['sent', 'delivered', 'read']),
+                'campaignMessages as delivered_count' => fn ($q) => $q->whereIn('status', ['delivered', 'read']),
+                'campaignMessages as read_count' => fn ($q) => $q->where('status', 'read'),
+                'campaignMessages as failed_count' => fn ($q) => $q->where('status', 'failed'),
+            ])
             ->orderByDesc('id')
             ->get()
             ->append('progress');
@@ -35,13 +42,29 @@ class WhatsAppCampaignController extends Controller
             ->filter(fn ($t) => ($t['status'] ?? '') === 'APPROVED')
             ->values();
 
+        $statuses = \App\Models\Status::select('id', 'name')->orderBy('name')->get()
+            ->map(fn ($s) => ['value' => $s->id, 'label' => $s->name]);
+
+        $countries = Contact::selectRaw('DISTINCT country')
+            ->whereNotNull('country')->where('country', '!=', '')
+            ->orderBy('country')->pluck('country')
+            ->map(fn ($c) => ['value' => $c, 'label' => $c]);
+
+        $labels = \App\Models\Label::select('id', 'name')->orderBy('name')->get()
+            ->map(fn ($l) => ['value' => $l->id, 'label' => $l->name]);
+
         return Inertia::render('WhatsApp/CampaignCreate', [
             'account' => $account->only(['id', 'name', 'phone_number']),
             'templates' => $templates,
+            'statuses' => $statuses,
+            'countries' => $countries,
+            'labels' => $labels,
+            'totalContacts' => Contact::whereNotNull('phone')->count(),
+            'health' => $whatsApp->getPhoneNumberHealth($account),
         ]);
     }
 
-    public function store(WhatsAppAccount $account, Request $request): RedirectResponse
+    public function store(WhatsAppAccount $account, Request $request, WhatsAppService $whatsApp): RedirectResponse
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -55,6 +78,14 @@ class WhatsAppCampaignController extends Controller
             'audience_rows.*.phone' => 'required_with:audience_rows|string',
             'audience_rows.*.name' => 'nullable|string',
         ]);
+
+        // Guard: a template with an image/video/document header must be sent WITH that media,
+        // otherwise Meta rejects every message with error #132012 (100% failure).
+        $requiredHeader = $whatsApp->templateRequiresHeaderMedia($account, $validated['template_name']);
+        if ($requiredHeader && !WhatsAppService::componentsHaveHeaderMedia($validated['template_components'] ?? [])) {
+            $kind = ['IMAGE' => 'una imagen', 'VIDEO' => 'un video', 'DOCUMENT' => 'un documento'][$requiredHeader] ?? 'un archivo';
+            return back()->withInput()->with('error', "La plantilla \"{$validated['template_name']}\" requiere {$kind} de encabezado. Sube el archivo antes de crear la campana.");
+        }
 
         $recipients = collect();
 
@@ -138,14 +169,20 @@ class WhatsAppCampaignController extends Controller
         $campaign->append('progress');
 
         $statusCounts = $campaign->campaignMessages()
-            ->selectRaw('status, COUNT(*) as count')
+            ->selectRaw('status, COUNT(*) as cnt')
             ->groupBy('status')
-            ->pluck('count', 'status')
+            ->pluck('cnt', 'status')
             ->toArray();
+
+        $sent = ($statusCounts['sent'] ?? 0) + ($statusCounts['delivered'] ?? 0) + ($statusCounts['read'] ?? 0);
+        $campaign->sent_count = $sent;
+        $campaign->failed_count = $statusCounts['failed'] ?? 0;
+        $campaign->delivered_count = ($statusCounts['delivered'] ?? 0) + ($statusCounts['read'] ?? 0);
+        $campaign->read_count = $statusCounts['read'] ?? 0;
 
         $recentMessages = $campaign->campaignMessages()
             ->orderByDesc('sent_at')
-            ->limit(50)
+            ->limit(100)
             ->get(['id', 'phone', 'contact_name', 'status', 'error_message', 'sent_at']);
 
         return Inertia::render('WhatsApp/CampaignShow', [
@@ -178,16 +215,53 @@ class WhatsAppCampaignController extends Controller
         return back()->with('success', 'Campana cancelada.');
     }
 
+    public function contactCount(WhatsAppAccount $account, Request $request): JsonResponse
+    {
+        $filters = $request->all();
+        $query = Contact::whereNotNull('phone');
+
+        if (!empty($filters['status_ids'])) {
+            $query->whereIn('status_id', (array) $filters['status_ids']);
+        }
+        if (!empty($filters['countries'])) {
+            $query->whereIn('country', (array) $filters['countries']);
+        }
+        if (!empty($filters['label_ids'])) {
+            $ids = (array) $filters['label_ids'];
+            $query->whereHas('labels', fn ($q) => $q->whereIn('labels.id', $ids));
+        }
+        if (!empty($filters['date_from'])) {
+            $query->where('date', '>=', $filters['date_from']);
+        }
+        if (!empty($filters['date_to'])) {
+            $query->where('date', '<=', $filters['date_to']);
+        }
+        if (!empty($filters['search'])) {
+            $query->where(fn ($q) => $q->where('phone', 'like', '%' . $filters['search'] . '%')
+                ->orWhere('name', 'like', '%' . $filters['search'] . '%'));
+        }
+
+        return response()->json(['count' => $query->count()]);
+    }
+
     public function status(WhatsAppAccount $account, WhatsAppCampaign $campaign): JsonResponse
     {
         $campaign->refresh();
 
+        $counts = $campaign->campaignMessages()
+            ->selectRaw('status, COUNT(*) as cnt')
+            ->groupBy('status')
+            ->pluck('cnt', 'status')
+            ->toArray();
+
+        $sent = ($counts['sent'] ?? 0) + ($counts['delivered'] ?? 0) + ($counts['read'] ?? 0);
+
         return response()->json([
             'status' => $campaign->status,
-            'sent_count' => $campaign->sent_count,
-            'failed_count' => $campaign->failed_count,
-            'delivered_count' => $campaign->delivered_count,
-            'read_count' => $campaign->read_count,
+            'sent_count' => $sent,
+            'failed_count' => $counts['failed'] ?? 0,
+            'delivered_count' => ($counts['delivered'] ?? 0) + ($counts['read'] ?? 0),
+            'read_count' => $counts['read'] ?? 0,
             'total_recipients' => $campaign->total_recipients,
             'progress' => $campaign->progress,
         ]);

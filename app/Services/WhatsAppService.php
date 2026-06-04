@@ -179,6 +179,70 @@ class WhatsAppService
     }
 
     /**
+     * Fetch the phone number's delivery health from Meta (quality rating, limit tier).
+     * Used to warn operators when marketing deliverability is being throttled.
+     */
+    public function getPhoneNumberHealth(WhatsAppAccount $account): array
+    {
+        try {
+            $response = Http::withToken($account->access_token)
+                ->get(self::BASE_URL . '/' . self::API_VERSION . '/' . $account->phone_number_id, [
+                    'fields' => 'quality_rating,messaging_limit_tier,throughput,name_status,status',
+                ]);
+            if (!$response->successful()) {
+                return [];
+            }
+            $d = $response->json();
+
+            return [
+                'quality_rating' => $d['quality_rating'] ?? null,      // GREEN | YELLOW | RED | UNKNOWN
+                'messaging_limit_tier' => $d['messaging_limit_tier'] ?? null,
+                'throughput' => $d['throughput']['level'] ?? null,
+                'status' => $d['status'] ?? null,
+            ];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Returns the header media format a template requires (IMAGE/VIDEO/DOCUMENT),
+     * or null if the template has no media header or cannot be found.
+     */
+    public function templateRequiresHeaderMedia(WhatsAppAccount $account, string $templateName): ?string
+    {
+        $tpl = collect($this->fetchTemplates($account))->firstWhere('name', $templateName);
+        if (!$tpl) {
+            return null;
+        }
+
+        $header = collect($tpl['components'] ?? [])->firstWhere('type', 'HEADER');
+        $format = strtoupper($header['format'] ?? 'TEXT');
+
+        return in_array($format, ['IMAGE', 'VIDEO', 'DOCUMENT'], true) ? $format : null;
+    }
+
+    /**
+     * True if the given send components include a header carrying media (id or link).
+     */
+    public static function componentsHaveHeaderMedia(?array $components): bool
+    {
+        foreach ($components ?? [] as $c) {
+            if (strtolower($c['type'] ?? '') !== 'header') {
+                continue;
+            }
+            $p = $c['parameters'][0] ?? [];
+            $type = strtolower($p['type'] ?? '');
+            if (in_array($type, ['image', 'video', 'document'], true)
+                && !empty($p[$type]['id'] ?? $p[$type]['link'] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Create a message template on Meta.
      * Templates go through Meta's review process before they can be used.
      */
@@ -189,7 +253,8 @@ class WhatsAppService
         $response = Http::withToken($account->access_token)->post($url, $payload);
 
         if (!$response->successful()) {
-            $err = $response->json('error.message', $response->body());
+            $err = $response->json('error.error_user_msg')
+                ?: $response->json('error.message', $response->body());
             Log::error('WhatsApp API: Failed to create template', [
                 'account_id' => $account->id,
                 'name' => $payload['name'] ?? null,

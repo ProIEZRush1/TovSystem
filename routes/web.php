@@ -108,6 +108,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Campaigns
         Route::get('/whatsapp/{account}/campaigns', [WhatsAppCampaignController::class, 'index'])->name('whatsapp.campaigns.index');
         Route::get('/whatsapp/{account}/campaigns/create', [WhatsAppCampaignController::class, 'create'])->name('whatsapp.campaigns.create');
+        Route::get('/whatsapp/{account}/campaigns/contact-count', [WhatsAppCampaignController::class, 'contactCount'])->name('whatsapp.campaigns.contact-count');
         Route::get('/whatsapp/{account}/campaigns/{campaign}', [WhatsAppCampaignController::class, 'show'])->name('whatsapp.campaigns.show');
         Route::get('/whatsapp/{account}/campaigns/{campaign}/status', [WhatsAppCampaignController::class, 'status'])->name('whatsapp.campaigns.status');
     });

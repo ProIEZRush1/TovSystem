@@ -40,6 +40,20 @@ class SendWhatsAppCampaignJob implements ShouldQueue
             return;
         }
 
+        // Fail-closed safety net: never blast a template that requires header media without it.
+        $requiredHeader = $whatsApp->templateRequiresHeaderMedia($account, $campaign->template_name);
+        if ($requiredHeader && !WhatsAppService::componentsHaveHeaderMedia($campaign->template_components ?? [])) {
+            $campaign->campaignMessages()->where('status', 'pending')->update([
+                'status' => 'failed',
+                'error_message' => "Plantilla requiere encabezado de {$requiredHeader} pero no se adjunto media. Envio abortado.",
+                'sent_at' => now(),
+            ]);
+            $this->refreshCounts($campaign);
+            $campaign->update(['status' => 'failed', 'completed_at' => now()]);
+            Log::warning("Campaign #{$campaign->id} aborted: template '{$campaign->template_name}' requires {$requiredHeader} header media but none was attached.");
+            return;
+        }
+
         $campaign->update([
             'status' => 'sending',
             'started_at' => now(),

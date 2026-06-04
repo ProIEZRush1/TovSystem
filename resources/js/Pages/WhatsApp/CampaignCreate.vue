@@ -1,13 +1,17 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { useI18n } from 'vue-i18n';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import MultiSelectDropdown from '@/Components/MultiSelectDropdown.vue';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 
 const { t } = useI18n();
-const props = defineProps({ account: Object, templates: Array });
+const props = defineProps({ account: Object, templates: Array, statuses: Array, countries: Array, labels: Array, totalContacts: Number, health: Object });
+
+const quality = computed(() => (props.health?.quality_rating || '').toUpperCase());
+const qualityWarn = computed(() => ['YELLOW', 'RED'].includes(quality.value));
 
 const audienceSource = ref('contacts');
 const audienceFile = ref(null);
@@ -164,6 +168,53 @@ const form = useForm({
     },
 });
 
+// Live contact count for "Contactos del sistema"
+const contactCount = ref(props.totalContacts ?? 0);
+const countLoading = ref(false);
+let countTimer = null;
+
+function hasAnyFilter() {
+    const f = form.audience_filters;
+    return f.status_ids.length || f.countries.length || f.label_ids.length || f.date_from || f.date_to || f.search;
+}
+
+function fetchContactCount() {
+    clearTimeout(countTimer);
+    countTimer = setTimeout(async () => {
+        countLoading.value = true;
+        try {
+            const f = form.audience_filters;
+            const query = new URLSearchParams();
+            f.status_ids.forEach(v => query.append('status_ids[]', v));
+            f.countries.forEach(v => query.append('countries[]', v));
+            f.label_ids.forEach(v => query.append('label_ids[]', v));
+            if (f.date_from) query.append('date_from', f.date_from);
+            if (f.date_to) query.append('date_to', f.date_to);
+            if (f.search) query.append('search', f.search);
+
+            const r = await axios.get(route('whatsapp.campaigns.contact-count', props.account.id) + '?' + query.toString());
+            contactCount.value = r.data.count;
+        } catch (e) {
+            // silently ignore
+        } finally {
+            countLoading.value = false;
+        }
+    }, 300);
+}
+
+watch(
+    () => [
+        form.audience_filters.status_ids,
+        form.audience_filters.countries,
+        form.audience_filters.label_ids,
+        form.audience_filters.date_from,
+        form.audience_filters.date_to,
+        form.audience_filters.search,
+    ],
+    () => { if (audienceSource.value === 'contacts') fetchContactCount(); },
+    { deep: true }
+);
+
 const templateParams = ref({});
 const paramSources = ref({});
 
@@ -191,6 +242,7 @@ const headerType = computed(() => {
 });
 
 const needsMediaUpload = computed(() => ['IMAGE', 'VIDEO'].includes(headerType.value));
+const mediaReady = computed(() => !needsMediaUpload.value || !!uploadedMediaId.value);
 
 const mediaFile = ref(null);
 const mediaPreview = ref(null);
@@ -287,6 +339,7 @@ function onFileSelected(e) {
 }
 
 function parsePastedPhones() {
+    const seen = new Set();
     return pastePhones.value.split('\n')
         .map(line => {
             const trimmed = line.trim();
@@ -305,12 +358,28 @@ function parsePastedPhones() {
                 const match = trimmed.match(/\+?\d{7,}/);
                 if (match) phone = normalizePhone(match[0]);
             }
-            return phone ? { phone, name: name || '' } : null;
+            if (!phone || seen.has(phone)) return null;
+            seen.add(phone);
+            return { phone, name: name || '' };
         })
         .filter(Boolean);
 }
 
+const pasteStats = computed(() => {
+    const raw = pastePhones.value.split('\n').map(l => l.trim()).filter(Boolean).length;
+    const unique = parsePastedPhones().length;
+    return { raw, unique, ignored: Math.max(0, raw - unique) };
+});
+
+function clearPaste() {
+    pastePhones.value = '';
+}
+
 function submit() {
+    if (!mediaReady.value) {
+        uploadError.value = 'Debes subir y confirmar la ' + (headerType.value === 'VIDEO' ? 'video' : 'imagen') + ' de encabezado antes de crear la campana.';
+        return;
+    }
     form.template_components = buildComponents();
     form.audience_source = audienceSource.value;
     if (audienceSource.value === 'file' && excelRows.value.length > 0) {
@@ -343,6 +412,26 @@ function paramLabel(p) { return '{{' + p + '}}'; }
         </template>
 
         <div class="max-w-4xl">
+            <!-- Delivery health warning -->
+            <div v-if="qualityWarn" :class="['mb-6 rounded-xl border p-4', quality === 'RED' ? 'bg-red-50 border-red-300' : 'bg-amber-50 border-amber-300']">
+                <div class="flex items-start gap-3">
+                    <svg class="h-5 w-5 shrink-0 mt-0.5" :class="quality === 'RED' ? 'text-red-600' : 'text-amber-600'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+                    <div class="text-sm">
+                        <p class="font-bold" :class="quality === 'RED' ? 'text-red-800' : 'text-amber-800'">
+                            Calidad del numero: {{ quality === 'RED' ? 'ROJA' : 'AMARILLA' }} — WhatsApp esta limitando las entregas
+                        </p>
+                        <p class="mt-1" :class="quality === 'RED' ? 'text-red-700' : 'text-amber-700'">
+                            Cuando se envia el mismo mensaje de marketing a las mismas personas muchas veces, WhatsApp baja la calidad del numero y <strong>deja de entregar</strong> los mensajes (aunque digan "enviado"). Por eso pueden aparecer 0 entregados y 0 respuestas.
+                        </p>
+                        <ul class="mt-2 list-disc list-inside" :class="quality === 'RED' ? 'text-red-700' : 'text-amber-700'">
+                            <li>No reenvies a los mismos contactos seguido — deja pasar varios dias.</li>
+                            <li>Envia a menos personas por dia para que la calidad se recupere.</li>
+                            <li>Evita mandar a numeros que no responden o que ya recibieron el mensaje.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             <form @submit.prevent="submit" class="space-y-6">
                 <!-- Step 1: Name + Template -->
                 <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-slate-900/5 space-y-4">
@@ -383,6 +472,7 @@ function paramLabel(p) { return '{{' + p + '}}'; }
                             {{ uploadingMedia ? 'Subiendo...' : 'Subir a WhatsApp' }}
                         </button>
                         <p v-if="uploadedMediaId" class="text-sm text-green-700 font-medium">Subido (ID: {{ uploadedMediaId }})</p>
+                        <p v-if="!uploadedMediaId" class="text-sm text-amber-700 font-semibold">Sube y confirma el {{ headerType === 'VIDEO' ? 'video' : 'imagen' }} antes de crear la campana — sin esto los mensajes fallan.</p>
                         <p v-if="uploadError" class="text-sm text-red-700">{{ uploadError }}</p>
                     </div>
 
@@ -498,10 +588,16 @@ function paramLabel(p) { return '{{' + p + '}}'; }
                     <!-- Paste phones -->
                     <div v-if="audienceSource === 'paste'" class="space-y-3">
                         <div class="rounded-lg bg-slate-50 border border-slate-200 p-4 space-y-3">
-                            <label class="block text-sm font-medium text-slate-700">Pega los telefonos (uno por linea)</label>
+                            <div class="flex items-center justify-between">
+                                <label class="block text-sm font-medium text-slate-700">Pega los telefonos (uno por linea)</label>
+                                <button v-if="pastePhones" type="button" @click="clearPaste" class="text-xs font-semibold text-red-600 hover:text-red-500">Limpiar</button>
+                            </div>
                             <textarea v-model="pastePhones" rows="8" class="block w-full rounded-lg border-slate-300 text-sm font-mono focus:border-brand-500 focus:ring-brand-500" placeholder="Nombre, +5215512345678&#10;+5215587654321&#10;Maria Lopez, 5529316009"></textarea>
-                            <p class="text-xs text-slate-500">Formatos: solo telefono, Nombre + telefono, o telefono + Nombre. Uno por linea.</p>
-                            <p v-if="pastePhones" class="text-sm font-medium text-brand-700">{{ parsePastedPhones().length }} telefonos detectados</p>
+                            <p class="text-xs text-slate-500">Formatos: solo telefono, Nombre + telefono, o telefono + Nombre. Uno por linea. <strong>Pegar agrega a lo que ya esta escrito</strong> — usa "Limpiar" para empezar de cero.</p>
+                            <p v-if="pastePhones" class="text-sm font-medium text-brand-700">
+                                {{ pasteStats.unique.toLocaleString() }} telefonos se enviaran
+                                <span v-if="pasteStats.ignored" class="text-amber-600 font-normal">({{ pasteStats.ignored.toLocaleString() }} repetidos o invalidos ignorados de {{ pasteStats.raw.toLocaleString() }} lineas)</span>
+                            </p>
                         </div>
                     </div>
 
@@ -509,23 +605,35 @@ function paramLabel(p) { return '{{' + p + '}}'; }
                     <template v-if="audienceSource === 'contacts'">
                     <p class="text-sm text-slate-500">Filtra que contactos recibiran el mensaje. Deja vacio para enviar a todos.</p>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Contact count badge -->
+                    <div class="rounded-lg bg-brand-50 border border-brand-200 px-4 py-3 flex items-center gap-3">
+                        <svg class="h-5 w-5 text-brand-600 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" /></svg>
+                        <div>
+                            <p class="text-sm font-bold text-brand-700">
+                                <span v-if="countLoading" class="animate-pulse">Contando...</span>
+                                <span v-else>{{ contactCount.toLocaleString() }} contactos</span>
+                            </p>
+                            <p class="text-xs text-brand-600">{{ hasAnyFilter() ? 'coinciden con los filtros seleccionados' : 'en total (sin filtros aplicados)' }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Filter dropdowns -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Estado(s)</label>
-                            <input v-model="form.audience_filters.status_ids" type="text" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" placeholder="IDs separados por coma: 22,23,35" />
-                            <p class="text-xs text-slate-400 mt-1">IDs de estado separados por coma</p>
+                            <MultiSelectDropdown v-model="form.audience_filters.status_ids" :options="statuses || []" placeholder="Todos los estados" />
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Pais(es)</label>
-                            <input v-model="form.audience_filters.countries" type="text" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" placeholder="Mexico,Argentina" />
+                            <MultiSelectDropdown v-model="form.audience_filters.countries" :options="countries || []" placeholder="Todos los paises" />
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Etiqueta(s)</label>
-                            <input v-model="form.audience_filters.label_ids" type="text" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" placeholder="IDs: 1,2" />
+                            <MultiSelectDropdown v-model="form.audience_filters.label_ids" :options="labels || []" placeholder="Todas las etiquetas" />
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Buscar</label>
-                            <input v-model="form.audience_filters.search" type="text" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" placeholder="nombre o telefono" />
+                            <input v-model="form.audience_filters.search" type="text" class="block w-full rounded-lg border-slate-300 text-sm focus:border-brand-500 focus:ring-brand-500" placeholder="Nombre o telefono..." />
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Fecha desde</label>
@@ -541,7 +649,7 @@ function paramLabel(p) { return '{{' + p + '}}'; }
 
                 <!-- Submit -->
                 <div class="flex items-center gap-3">
-                    <button type="submit" :disabled="form.processing || !form.name || !form.template_name" class="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
+                    <button type="submit" :disabled="form.processing || !form.name || !form.template_name || !mediaReady" class="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
                         {{ form.processing ? 'Creando...' : 'Crear Campana' }}
                     </button>
                     <Link :href="route('whatsapp.campaigns.index', account.id)" class="rounded-lg px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">Cancelar</Link>

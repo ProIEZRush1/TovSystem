@@ -26,6 +26,7 @@
         "filterStatus": "Filtrar por Estado",
         "filterCountry": "Filtrar por Pais",
         "allStatuses": "Todos los Estados",
+        "noStatus": "Sin estado",
         "allCountries": "Todos los Paises",
         "phone": "Telefono",
         "name": "Nombre",

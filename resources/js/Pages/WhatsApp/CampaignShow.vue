@@ -31,8 +31,8 @@ async function pollStatus() {
 }
 
 onMounted(() => {
-    if (props.campaign.status === 'sending') {
-        pollTimer = setInterval(pollStatus, 5000);
+    if (['sending', 'completed'].includes(props.campaign.status)) {
+        pollTimer = setInterval(pollStatus, props.campaign.status === 'sending' ? 5000 : 30000);
     }
 });
 onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); });

@@ -80,13 +80,21 @@ class Contact extends Model
         });
     }
 
-    /**
-     * Accepts int (single status) or array of ints (multi).
-     */
-    public function scopeFilterByStatus(Builder $query, int|array|null $statusId): Builder
+    public function scopeFilterByStatus(Builder $query, int|string|array|null $statusId): Builder
     {
         if (is_null($statusId) || (is_array($statusId) && empty($statusId))) {
             return $query;
+        }
+
+        if ($statusId === 'none' || (is_array($statusId) && in_array('none', $statusId))) {
+            $realIds = is_array($statusId) ? array_filter($statusId, fn ($v) => $v !== 'none') : [];
+            if (empty($realIds)) {
+                return $query->whereNull('status_id');
+            }
+            return $query->where(function ($q) use ($realIds) {
+                $q->whereIn('status_id', $realIds)
+                  ->orWhereNull('status_id');
+            });
         }
 
         if (is_array($statusId)) {

@@ -26,6 +26,7 @@
         "filterStatus": "Filter by Status",
         "filterCountry": "Filter by Country",
         "allStatuses": "All Statuses",
+        "noStatus": "No status",
         "allCountries": "All Countries",
         "phone": "Phone",
         "name": "Name",

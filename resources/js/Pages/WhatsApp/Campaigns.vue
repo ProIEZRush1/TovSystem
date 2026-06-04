@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { useI18n } from 'vue-i18n';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
@@ -11,6 +11,9 @@ function statusColor(s) {
 }
 function statusLabel(s) {
     return { draft: 'Borrador', sending: 'Enviando...', completed: 'Completada', failed: 'Fallida', cancelled: 'Cancelada' }[s] || s;
+}
+function openCampaign(c) {
+    router.visit(route('whatsapp.campaigns.show', [props.account.id, c.id]));
 }
 </script>
 
@@ -39,30 +42,26 @@ function statusLabel(s) {
                         <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Nombre</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Template</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Estado</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Progreso</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Destinatarios</th>
+                        <th class="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">Enviados</th>
+                        <th class="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">Entregados</th>
+                        <th class="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">Leidos</th>
+                        <th class="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">Fallidos</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Fecha</th>
-                        <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Acciones</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-50">
-                    <tr v-for="c in campaigns" :key="c.id">
-                        <td class="px-4 py-3 text-sm font-medium text-slate-900">{{ c.name }}</td>
+                    <tr v-for="c in campaigns" :key="c.id" @click="openCampaign(c)" class="hover:bg-brand-50 cursor-pointer transition">
+                        <td class="px-4 py-3">
+                            <p class="text-sm font-medium text-brand-700">{{ c.name }}</p>
+                            <p class="text-xs text-slate-400">{{ c.total_recipients.toLocaleString() }} destinatarios</p>
+                        </td>
                         <td class="px-4 py-3 text-sm font-mono text-slate-600">{{ c.template_name }}</td>
                         <td class="px-4 py-3"><span :class="['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', statusColor(c.status)]">{{ statusLabel(c.status) }}</span></td>
-                        <td class="px-4 py-3">
-                            <div class="flex items-center gap-2">
-                                <div class="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                    <div class="h-full bg-brand-600 rounded-full transition-all" :style="{ width: c.progress + '%' }"></div>
-                                </div>
-                                <span class="text-xs text-slate-500">{{ c.progress }}%</span>
-                            </div>
-                        </td>
-                        <td class="px-4 py-3 text-sm text-slate-600">{{ c.total_recipients.toLocaleString() }}</td>
+                        <td class="px-4 py-3 text-center text-sm font-bold text-blue-600">{{ (c.sent_count || 0).toLocaleString() }}</td>
+                        <td class="px-4 py-3 text-center text-sm font-bold text-green-600">{{ (c.delivered_count || 0).toLocaleString() }}</td>
+                        <td class="px-4 py-3 text-center text-sm font-bold text-emerald-600">{{ (c.read_count || 0).toLocaleString() }}</td>
+                        <td class="px-4 py-3 text-center text-sm font-bold text-red-600">{{ (c.failed_count || 0).toLocaleString() }}</td>
                         <td class="px-4 py-3 text-sm text-slate-500">{{ new Date(c.created_at).toLocaleDateString() }}</td>
-                        <td class="px-4 py-3 text-right">
-                            <Link :href="route('whatsapp.campaigns.show', [account.id, c.id])" class="text-sm font-medium text-brand-600 hover:text-brand-500">Ver</Link>
-                        </td>
                     </tr>
                 </tbody>
             </table>

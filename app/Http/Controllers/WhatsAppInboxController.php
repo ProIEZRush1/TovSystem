@@ -19,6 +19,7 @@ class WhatsAppInboxController extends Controller
         $conversations = $account->conversations()
             ->with('contact:id,name,phone')
             ->where('is_archived', false)
+            ->orderByRaw('CASE WHEN unread_count > 0 THEN 0 ELSE 1 END')
             ->orderByDesc('last_message_at')
             ->limit(200)
             ->get();
@@ -128,6 +129,11 @@ class WhatsAppInboxController extends Controller
             'language_code' => 'required|string',
             'components' => 'nullable|array',
         ]);
+
+        $requiredHeader = $whatsApp->templateRequiresHeaderMedia($account, $validated['template_name']);
+        if ($requiredHeader && !WhatsAppService::componentsHaveHeaderMedia($validated['components'] ?? [])) {
+            return response()->json(['error' => "Esta plantilla requiere {$requiredHeader} de encabezado. Envíala desde Campañas, donde puedes subir el archivo."], 422);
+        }
 
         $result = $whatsApp->sendTemplateMessage(
             $account,

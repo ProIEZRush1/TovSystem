@@ -24,6 +24,12 @@ const templateLang = ref('es_MX');
 const templateParams = ref({});
 const sendingTemplate = ref(false);
 
+const selectedInboxTpl = computed(() => availableTemplates.value.find(t => t.name === templateName.value));
+const inboxNeedsMedia = computed(() => {
+    const h = (selectedInboxTpl.value?.components || []).find(c => c.type === 'HEADER');
+    return ['IMAGE', 'VIDEO'].includes(h?.format);
+});
+
 let pollInterval = null;
 
 const filteredConversations = computed(() => {
@@ -36,6 +42,7 @@ const filteredConversations = computed(() => {
 });
 
 function selectConversation(conv) {
+    conv.unread_count = 0;
     activeConv.value = conv;
     loadMessages();
     startPolling();
@@ -93,6 +100,11 @@ async function sendMessage() {
 
 async function sendTemplateMsg() {
     if (!templateName.value || !activeConv.value) return;
+    if (inboxNeedsMedia.value) {
+        sendError.value = 'Esta plantilla requiere imagen/video de encabezado. Envíala desde Campañas.';
+        setTimeout(() => { sendError.value = ''; }, 6000);
+        return;
+    }
     sendingTemplate.value = true;
     try {
         const components = [];
@@ -271,7 +283,8 @@ function isMedia(type) {
                             <option value="">-- Selecciona plantilla --</option>
                             <option v-for="t in availableTemplates" :key="t.id" :value="t.name">{{ t.name }} ({{ t.language }})</option>
                         </select>
-                        <button @click="sendTemplateMsg" :disabled="!templateName || sendingTemplate" class="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
+                        <p v-if="inboxNeedsMedia" class="text-xs text-amber-700 font-medium">Esta plantilla requiere imagen/video de encabezado. Envíala desde Campañas.</p>
+                        <button @click="sendTemplateMsg" :disabled="!templateName || sendingTemplate || inboxNeedsMedia" class="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50 transition">
                             {{ sendingTemplate ? 'Enviando...' : 'Enviar plantilla' }}
                         </button>
                     </div>

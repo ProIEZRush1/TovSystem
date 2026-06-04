@@ -23,13 +23,16 @@ class ContactController extends Controller
         $contacts = Contact::query()
             ->with(['status', 'labels'])
             ->search($request->input('search'))
-            ->filterByStatus($this->parseMultiInt($request->input('status_id')))
+            ->filterByStatus($this->parseMultiMixed($request->input('status_id')))
             ->filterByCountry($this->parseMultiString($request->input('country')))
-            ->filterByLabel($this->parseMultiInt($request->input('label_id')))
+            ->filterByLabel($this->parseMultiMixed($request->input('label_id')))
             ->filterByDate($request->input('date_from'), $request->input('date_to'))
             ->when($request->input('sort'), function ($query) use ($request) {
                 $direction = $request->input('direction', 'asc');
-                $query->orderBy($request->input('sort'), $direction);
+                // Tiebreaker by unique id keeps offset pagination stable when the
+                // sort column has duplicate values (e.g. many contacts share a name),
+                // otherwise pages overlap and rows duplicate during infinite scroll.
+                $query->orderBy($request->input('sort'), $direction)->orderBy('id');
             }, function ($query) {
                 $query->latest('id');
             })
@@ -59,13 +62,16 @@ class ContactController extends Controller
         $contacts = Contact::query()
             ->with(['status', 'labels'])
             ->search($request->input('search'))
-            ->filterByStatus($this->parseMultiInt($request->input('status_id')))
+            ->filterByStatus($this->parseMultiMixed($request->input('status_id')))
             ->filterByCountry($this->parseMultiString($request->input('country')))
-            ->filterByLabel($this->parseMultiInt($request->input('label_id')))
+            ->filterByLabel($this->parseMultiMixed($request->input('label_id')))
             ->filterByDate($request->input('date_from'), $request->input('date_to'))
             ->when($request->input('sort'), function ($query) use ($request) {
                 $direction = $request->input('direction', 'asc');
-                $query->orderBy($request->input('sort'), $direction);
+                // Tiebreaker by unique id keeps offset pagination stable when the
+                // sort column has duplicate values (e.g. many contacts share a name),
+                // otherwise pages overlap and rows duplicate during infinite scroll.
+                $query->orderBy($request->input('sort'), $direction)->orderBy('id');
             }, function ($query) {
                 $query->latest('id');
             })
@@ -374,6 +380,20 @@ class ContactController extends Controller
             return empty($out) ? null : (count($out) === 1 ? $out[0] : $out);
         }
         return (int) $input;
+    }
+
+    private function parseMultiMixed($input): int|string|array|null
+    {
+        if (is_null($input) || $input === '' || $input === []) return null;
+        $parts = is_array($input) ? $input : explode(',', (string) $input);
+        $out = [];
+        foreach ($parts as $v) {
+            $v = trim((string) $v);
+            if ($v === '') continue;
+            $out[] = is_numeric($v) ? (int) $v : $v;
+        }
+        if (empty($out)) return null;
+        return count($out) === 1 ? $out[0] : $out;
     }
 
     private function parseMultiString($input): string|array|null

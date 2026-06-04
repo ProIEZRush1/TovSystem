@@ -56,6 +56,7 @@ const selectedHeaderType = computed(() => {
     return header?.format || null;
 });
 const needsHeaderMedia = computed(() => ['IMAGE', 'VIDEO'].includes(selectedHeaderType.value));
+const bulkMediaReady = computed(() => bulkType.value !== 'template' || !needsHeaderMedia.value || !!bulkMediaId.value);
 const bulkMediaFile = ref(null);
 const bulkMediaPreview = ref(null);
 const bulkMediaUploading = ref(false);
@@ -263,6 +264,11 @@ async function submitBulkSend() {
             language_code: bulkLanguage.value,
         };
         if (bulkType.value === 'template') {
+            if (needsHeaderMedia.value && !bulkMediaId.value) {
+                bulkResult.value = { error: 'Debes subir la ' + (selectedHeaderType.value === 'VIDEO' ? 'video' : 'imagen') + ' de encabezado antes de enviar.' };
+                bulkSending.value = false;
+                return;
+            }
             payload.components = buildTemplateComponents();
             payload.language_code = selectedTemplate.value?.language || bulkLanguage.value;
         }
@@ -509,6 +515,7 @@ function formatDate(dateStr) {
                                         {{ bulkMediaUploading ? 'Subiendo...' : 'Subir a WhatsApp' }}
                                     </button>
                                     <p v-if="bulkMediaId" class="text-xs text-green-700 font-medium">Subido correctamente</p>
+                                    <p v-if="!bulkMediaId" class="text-xs text-amber-700 font-semibold">Sube la {{ selectedHeaderType === 'VIDEO' ? 'video' : 'imagen' }} antes de enviar — sin esto fallan todos.</p>
                                     <p v-if="bulkMediaError" class="text-xs text-red-700">{{ bulkMediaError }}</p>
                                 </div>
 
@@ -538,7 +545,7 @@ function formatDate(dateStr) {
                         </div>
                         <div class="shrink-0 border-t border-slate-100 px-6 py-4 flex justify-end gap-3 bg-white">
                             <button @click="showBulkSend = false" class="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">{{ t('common.close') }}</button>
-                            <button @click="submitBulkSend" :disabled="bulkSending" class="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50 transition">
+                            <button @click="submitBulkSend" :disabled="bulkSending || !bulkMediaReady" class="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50 transition">
                                 {{ bulkSending ? t('whatsapp.sending') : t('whatsapp.sendToSelected') }}
                             </button>
                         </div>

@@ -173,9 +173,10 @@ const selectAll = computed({
     },
 });
 
-const statusOptions = computed(() =>
-    props.statuses.map(s => ({ value: s.id, label: s.name }))
-);
+const statusOptions = computed(() => [
+    { value: 'none', label: t('contacts.noStatus') },
+    ...props.statuses.map(s => ({ value: s.id, label: s.name })),
+]);
 
 const labelOptions = computed(() => [
     { value: 'none', label: t('labels.noLabel') },
@@ -253,7 +254,10 @@ async function loadMore() {
     try {
         const response = await axios.get(url);
         const page = response.data;
-        allContacts.value.push(...page.data);
+        // Defensive dedupe: never append a contact already in the list, so the
+        // visible list, "select all" and copy never inflate from page overlap.
+        const existing = new Set(allContacts.value.map(c => c.id));
+        allContacts.value.push(...page.data.filter(c => !existing.has(c.id)));
         currentPage.value = page.current_page;
         nextPageUrl.value = page.current_page < page.last_page ? 'pending' : null;
         totalContacts.value = page.total;
@@ -381,15 +385,18 @@ const copySuccess = ref(false);
 const copiedCount = ref(0);
 
 async function copySelectedPhones() {
-    const lines = allContacts.value
-        .filter(c => selectedIds.value.includes(c.id))
-        .map(c => {
-            const name = c.name ? c.name.trim() : '';
-            return name ? `${name}, ${c.phone}` : `, ${c.phone}`;
-        })
-        .join('\n');
-    await navigator.clipboard.writeText(lines);
-    copiedCount.value = selectedIds.value.length;
+    const idSet = new Set(selectedIds.value);
+    const seenPhone = new Set();
+    const rows = [];
+    for (const c of allContacts.value) {
+        if (!idSet.has(c.id) || !c.phone || seenPhone.has(c.phone)) continue;
+        seenPhone.add(c.phone);
+        const name = c.name ? c.name.trim() : '';
+        rows.push(name ? `${name}, ${c.phone}` : c.phone);
+    }
+    await navigator.clipboard.writeText(rows.join('\n'));
+    // Report the real number of unique phones copied, not the raw selection count.
+    copiedCount.value = rows.length;
     copySuccess.value = true;
     setTimeout(() => { copySuccess.value = false; }, 2000);
 }
