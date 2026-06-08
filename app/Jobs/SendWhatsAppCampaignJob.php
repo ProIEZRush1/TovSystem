@@ -129,7 +129,7 @@ class SendWhatsAppCampaignJob implements ShouldQueue
         } else {
             $msg->update([
                 'status' => 'failed',
-                'error_message' => $result['error'],
+                'error_message' => mb_substr((string) $result['error'], 0, 2000),
                 'sent_at' => now(),
             ]);
         }

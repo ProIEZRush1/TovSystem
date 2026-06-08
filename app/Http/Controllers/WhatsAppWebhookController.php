@@ -171,7 +171,13 @@ class WhatsAppWebhookController extends Controller
         if ($newStatus === 'failed' && !empty($status['errors'])) {
             $err = $status['errors'][0] ?? [];
             $update['error_code'] = $err['code'] ?? null;
-            $update['error_message'] = trim(($err['title'] ?? '') . ': ' . ($err['error_data']['details'] ?? $err['message'] ?? ''), ': ');
+            // Cap length defensively: Meta error details can include long URLs that
+            // overflow the column and abort the whole status update.
+            $update['error_message'] = mb_substr(
+                trim(($err['title'] ?? '') . ': ' . ($err['error_data']['details'] ?? $err['message'] ?? ''), ': '),
+                0,
+                2000
+            );
         }
 
         // Update in whatsapp_messages
