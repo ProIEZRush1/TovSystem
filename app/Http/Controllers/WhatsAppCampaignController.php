@@ -139,8 +139,8 @@ class WhatsAppCampaignController extends Controller
             'name' => $validated['name'],
             'template_name' => $validated['template_name'],
             'template_language' => $validated['template_language'],
-            'template_components' => $validated['template_components'],
-            'audience_filters' => $validated['audience_filters'],
+            'template_components' => $validated['template_components'] ?? [],
+            'audience_filters' => $validated['audience_filters'] ?? [],
             'status' => 'draft',
             'total_recipients' => $recipients->count(),
         ]);
